@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir:*)",
+      "Bash(dir:*)",
+      "Bash(findstr:*)",
+      "Bash(gradlew.bat clean:*)",
+      "Bash(gradle wrapper:*)",
+      "Bash(./gradlew build:*)",
+      "Bash(./gradlew runClient:*)",
+      "Bash(tee:*)",
+      "WebSearch",
+      "Bash(./gradlew clean build:*)",
+      "Bash(xargs:*)",
+      "Bash(cat:*)",
+      "WebFetch(domain:www.curseforge.com)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

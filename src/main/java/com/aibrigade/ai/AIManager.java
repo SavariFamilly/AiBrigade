@@ -87,6 +87,8 @@ public class AIManager {
      * Updates AI for all active bots
      *
      * @param event The server tick event
+     * Note: This method is not currently registered to an event bus.
+     * TODO: Register this class to the event bus in AIBrigadeMod or make this static
      */
     @SubscribeEvent
     public void onServerTick(TickEvent.ServerTickEvent event) {

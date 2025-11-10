@@ -71,8 +71,8 @@ public class AIBrigadeMod {
         // Register setup method
         modEventBus.addListener(this::setup);
 
-        // Register this class for Forge events
-        MinecraftForge.EVENT_BUS.register(this);
+        // Register this class for Forge events (EventBus 7 style)
+        net.minecraftforge.eventbus.api.BusGroup.DEFAULT.register(java.lang.invoke.MethodHandles.lookup(), this);
 
         LOGGER.info("AIBrigade event buses registered successfully");
     }
@@ -99,6 +99,10 @@ public class AIBrigadeMod {
             // Initialize AI manager with multithreading support
             aiManager = new AIManager(configManager.getAIThreadPoolSize());
             LOGGER.info("AI manager initialized with {} threads", configManager.getAIThreadPoolSize());
+
+            // Register AI manager for events (EventBus 7 style)
+            net.minecraftforge.eventbus.api.BusGroup.DEFAULT.register(java.lang.invoke.MethodHandles.lookup(), aiManager);
+            LOGGER.info("AI manager registered to event bus");
 
             // Verify dependencies
             verifyDependencies();

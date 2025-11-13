@@ -1,6 +1,7 @@
 package com.aibrigade.ai;
 
 import com.aibrigade.bots.BotEntity;
+import com.aibrigade.utils.*;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
@@ -41,7 +42,7 @@ public class BotGoals {
         public FollowLeaderGoal(BotEntity bot, float followRadius) {
             this.bot = bot;
             this.followRadius = followRadius;
-            this.minDistance = 2.0f;
+            this.minDistance = (float) BotAIConstants.MIN_FOLLOW_DISTANCE;
             this.setFlags(EnumSet.of(Goal.Flag.MOVE, Goal.Flag.LOOK));
         }
 
@@ -53,25 +54,23 @@ public class BotGoals {
             }
 
             // Find leader entity
-            leader = findLeaderEntity();
-            if (leader == null || !leader.isAlive()) {
+            leader = EntityFinder.findLeader(bot);
+            if (!EntityValidator.isEntityValid(leader)) {
                 return false;
             }
 
             // Check if bot is outside follow radius
-            double distance = bot.distanceToSqr(leader);
-            return distance > (minDistance * minDistance);
+            return DistanceHelper.isOutsideDistance(bot, leader, minDistance);
         }
 
         @Override
         public boolean canContinueToUse() {
-            if (leader == null || !leader.isAlive()) {
+            if (!EntityValidator.isEntityValid(leader)) {
                 return false;
             }
 
-            double distance = bot.distanceToSqr(leader);
-            return distance > (minDistance * minDistance) &&
-                   distance < (followRadius * followRadius * 4); // Stop if too far
+            return DistanceHelper.isOutsideDistance(bot, leader, minDistance) &&
+                   DistanceHelper.isWithinDistance(bot, leader, followRadius * 2);
         }
 
         @Override
@@ -86,30 +85,29 @@ public class BotGoals {
             }
 
             // Look at leader
-            bot.getLookControl().setLookAt(leader, 10.0F, bot.getMaxHeadXRot());
+            BotLookHelper.lookAtEntity(bot, leader);
 
             // Update path periodically
             if (--updatePathCooldown <= 0) {
                 updatePathCooldown = 10; // Update every 10 ticks
 
-                double distance = bot.distanceToSqr(leader);
-
                 // If far from leader, move towards them
-                if (distance > (followRadius * followRadius)) {
-                    // Path to leader
-                    bot.getNavigation().moveTo(leader, 1.2D); // Move faster when catching up
-                } else if (distance < (minDistance * minDistance)) {
+                if (DistanceHelper.isOutsideDistance(bot, leader, followRadius)) {
+                    // Path to leader - move faster when catching up
+                    BotMovementHelper.moveToEntity(bot, leader, BotAIConstants.SPEED_RUN);
+                } else if (DistanceHelper.isWithinDistance(bot, leader, minDistance)) {
                     // Too close, back off slightly
-                    bot.getNavigation().stop();
+                    BotMovementHelper.stopMovement(bot);
                 } else {
                     // Normal follow speed
-                    bot.getNavigation().moveTo(leader, 1.0D);
+                    BotMovementHelper.moveToEntity(bot, leader);
                 }
 
                 // Check if stuck or need to climb
-                if (bot.getNavigation().isDone() && distance > (minDistance * minDistance)) {
+                if (BotMovementHelper.hasReachedDestination(bot) &&
+                    DistanceHelper.isOutsideDistance(bot, leader, minDistance)) {
                     // Try to jump if blocked
-                    bot.getJumpControl().jump();
+                    BotJumpHelper.jump(bot);
                 }
             }
         }
@@ -117,20 +115,7 @@ public class BotGoals {
         @Override
         public void stop() {
             leader = null;
-            bot.getNavigation().stop();
-        }
-
-        /**
-         * Find the leader entity in the world
-         */
-        private LivingEntity findLeaderEntity() {
-            if (bot.getLeaderId() == null) {
-                return null;
-            }
-
-            // Try to find entity by UUID
-            // TODO: Implement proper entity lookup by UUID
-            return null;
+            BotMovementHelper.stopMovement(bot);
         }
     }
 
@@ -155,13 +140,13 @@ public class BotGoals {
         public boolean canUse() {
             // Find nearest hostile entity
             target = findNearestHostile();
-            return target != null && target.isAlive();
+            return EntityValidator.isEntityValid(target);
         }
 
         @Override
         public boolean canContinueToUse() {
-            return target != null && target.isAlive() &&
-                   bot.distanceToSqr(target) < (attackRange * attackRange * 4);
+            return EntityValidator.isEntityValid(target) &&
+                   DistanceHelper.isWithinDistance(bot, target, attackRange * 2);
         }
 
         @Override
@@ -177,19 +162,17 @@ public class BotGoals {
             }
 
             // Look at target
-            bot.getLookControl().setLookAt(target, 30.0F, 30.0F);
-
-            double distance = bot.distanceToSqr(target);
+            BotLookHelper.lookAtEntity(bot, target, BotAIConstants.LOOK_YAW_SPEED_FAST, BotAIConstants.LOOK_PITCH_SPEED_FAST);
 
             // Move towards target if too far
-            if (distance > (attackRange * attackRange)) {
-                bot.getNavigation().moveTo(target, 1.2D);
+            if (DistanceHelper.isOutsideDistance(bot, target, attackRange)) {
+                BotMovementHelper.moveToEntity(bot, target, BotAIConstants.SPEED_RUN);
             } else {
-                bot.getNavigation().stop();
+                BotMovementHelper.stopMovement(bot);
 
                 // Attack if cooldown expired
                 if (--attackCooldown <= 0) {
-                    attackCooldown = 20; // Attack every second
+                    attackCooldown = BotAIConstants.COMBAT_COOLDOWN_TICKS;
                     bot.doHurtTarget(target);
                 }
             }
@@ -198,7 +181,7 @@ public class BotGoals {
         @Override
         public void stop() {
             target = null;
-            bot.getNavigation().stop();
+            BotMovementHelper.stopMovement(bot);
         }
 
         /**
@@ -250,15 +233,14 @@ public class BotGoals {
             }
 
             // Check if reached waypoint
-            if (bot.blockPosition().distSqr(currentWaypoint) < 4) {
+            if (DistanceHelper.isWithinDistance(bot, currentWaypoint, 2.0)) {
                 // Wait at waypoint
                 if (--waypointCooldown <= 0) {
                     selectNewWaypoint();
                 }
             } else {
                 // Move to waypoint
-                bot.getNavigation().moveTo(currentWaypoint.getX(), currentWaypoint.getY(),
-                    currentWaypoint.getZ(), 0.8D);
+                BotMovementHelper.moveToBlockPos(bot, currentWaypoint, BotAIConstants.SPEED_SLOW);
             }
         }
 
@@ -271,21 +253,21 @@ public class BotGoals {
                 return;
             }
 
-            // Generate random point within patrol radius
-            double angle = bot.getRandom().nextDouble() * 2 * Math.PI;
-            double distance = bot.getRandom().nextDouble() * patrolRadius;
-
-            int offsetX = (int) (Math.cos(angle) * distance);
-            int offsetZ = (int) (Math.sin(angle) * distance);
-
-            currentWaypoint = home.offset(offsetX, 0, offsetZ);
+            // Generate random point within patrol radius using PositionCalculator
+            currentWaypoint = BlockPos.containing(
+                PositionCalculator.getRandomOffsetPosition(
+                    home.getCenter(),
+                    patrolRadius,
+                    bot.getRandom()
+                )
+            );
             waypointCooldown = 100; // Wait 5 seconds at waypoint
         }
 
         @Override
         public void stop() {
             currentWaypoint = null;
-            bot.getNavigation().stop();
+            BotMovementHelper.stopMovement(bot);
         }
     }
 
@@ -320,15 +302,14 @@ public class BotGoals {
         @Override
         public void tick() {
             if (disperseTarget != null) {
-                bot.getNavigation().moveTo(disperseTarget.getX(), disperseTarget.getY(),
-                    disperseTarget.getZ(), 1.0D);
+                BotMovementHelper.moveToBlockPos(bot, disperseTarget, BotAIConstants.SPEED_WALK);
             }
         }
 
         @Override
         public void stop() {
             disperseTarget = null;
-            bot.getNavigation().stop();
+            BotMovementHelper.stopMovement(bot);
         }
 
         /**
@@ -379,7 +360,7 @@ public class BotGoals {
         @Override
         public void tick() {
             // Jump to climb
-            bot.getJumpControl().jump();
+            BotJumpHelper.jump(bot);
 
             // TODO: Implement advanced climbing
             // - Place blocks if bot has them
@@ -442,27 +423,24 @@ public class BotGoals {
             }
 
             // Return to home if too far
-            if (bot.blockPosition().distSqr(home) > (guardRadius * guardRadius)) {
-                bot.getNavigation().moveTo(home.getX(), home.getY(), home.getZ(), 1.0D);
+            if (DistanceHelper.isOutsideDistance(bot, home, guardRadius)) {
+                BotMovementHelper.moveToBlockPos(bot, home, BotAIConstants.SPEED_WALK);
             } else {
-                bot.getNavigation().stop();
+                BotMovementHelper.stopMovement(bot);
 
                 // Look around randomly
                 if (--lookAroundCooldown <= 0) {
                     lookAroundCooldown = 60; // Look around every 3 seconds
 
-                    double angle = bot.getRandom().nextDouble() * 2 * Math.PI;
-                    double lookX = bot.getX() + Math.cos(angle) * 5;
-                    double lookZ = bot.getZ() + Math.sin(angle) * 5;
-
-                    bot.getLookControl().setLookAt(lookX, bot.getY(), lookZ, 10.0F, 10.0F);
+                    // Use BotLookHelper to look at a random position
+                    BotLookHelper.lookAtRandomTarget(bot);
                 }
             }
         }
 
         @Override
         public void stop() {
-            bot.getNavigation().stop();
+            BotMovementHelper.stopMovement(bot);
         }
     }
 
@@ -495,15 +473,14 @@ public class BotGoals {
         @Override
         public void tick() {
             if (fleeTarget != null) {
-                bot.getNavigation().moveTo(fleeTarget.getX(), fleeTarget.getY(),
-                    fleeTarget.getZ(), 1.5D); // Flee quickly
+                BotMovementHelper.moveToBlockPos(bot, fleeTarget, BotAIConstants.SPEED_SPRINT);
             }
         }
 
         @Override
         public void stop() {
             fleeTarget = null;
-            bot.getNavigation().stop();
+            BotMovementHelper.stopMovement(bot);
         }
 
         /**

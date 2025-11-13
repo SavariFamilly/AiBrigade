@@ -3,7 +3,6 @@ package com.aibrigade.bots;
 import com.google.common.util.concurrent.RateLimiter;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import com.google.gson.JsonArray;
 import com.mojang.authlib.GameProfile;
 import com.mojang.authlib.properties.Property;
 import net.minecraft.Util;
@@ -20,11 +19,11 @@ import java.util.concurrent.ConcurrentHashMap;
  * MojangSkinFetcher - Récupère automatiquement les skins de joueurs Minecraft aléatoires
  *
  * Ce système permet de :
- * - Récupérer des skins de joueurs réels via l'API Mojang
- * - Créer un GameProfile complet avec les textures
+ * - Générer des pseudos aléatoires de style Minecraft
+ * - Vérifier leur existence via l'API Mojang officielle
+ * - Récupérer les skins de joueurs réels existants
  * - Mettre en cache les résultats pour éviter trop d'appels API
- * - Gérer une grande base de données de joueurs populaires
- * - Convertir des noms de joueurs en UUID via l'API Mojang
+ * - Créer un GameProfile complet avec les textures
  */
 public class MojangSkinFetcher {
 
@@ -40,125 +39,22 @@ public class MojangSkinFetcher {
     private static final String SESSION_SERVER_URL = "https://sessionserver.mojang.com/session/minecraft/profile/";
     private static final String USERNAME_TO_UUID_URL = "https://api.mojang.com/users/profiles/minecraft/";
 
-    // Large base de données de pseudos Minecraft populaires et aléatoires
-    // Ces joueurs ont des skins intéressants et variés
-    public static final List<String> PLAYER_NAMES = new ArrayList<>();
-
-    // Tracking used player names to ensure uniqueness
+    // Tracking used player UUIDs to ensure uniqueness
     private static final Set<UUID> USED_PLAYER_UUIDS = ConcurrentHashMap.newKeySet();
 
     // Cache nom -> UUID pour éviter les requêtes répétées
     private static final Map<String, UUID> NAME_TO_UUID_CACHE = new ConcurrentHashMap<>();
 
-    static {
-        // === JOUEURS CÉLÈBRES ET DÉVELOPPEURS ===
-        PLAYER_NAMES.add("Notch");
-        PLAYER_NAMES.add("jeb_");
-        PLAYER_NAMES.add("C418");
-        PLAYER_NAMES.add("Deadmau5");
-        PLAYER_NAMES.add("Grumm"); // Mojang dev (pas Dinnerbone qui inverse les entités)
+    // Cache des pseudos vérifiés qui existent
+    private static final Set<String> VERIFIED_USERNAMES = ConcurrentHashMap.newKeySet();
 
-        // === YOUTUBEURS/STREAMERS POPULAIRES ===
-        PLAYER_NAMES.add("Dream");
-        PLAYER_NAMES.add("GeorgeNotFound");
-        PLAYER_NAMES.add("Sapnap");
-        PLAYER_NAMES.add("TommyInnit");
-        PLAYER_NAMES.add("Tubbo");
-        PLAYER_NAMES.add("Ranboo");
-        PLAYER_NAMES.add("Philza");
-        PLAYER_NAMES.add("Technoblade");
-        PLAYER_NAMES.add("CaptainSparklez");
-        PLAYER_NAMES.add("DanTDM");
-        PLAYER_NAMES.add("Grian");
-        PLAYER_NAMES.add("MumboJumbo");
-        PLAYER_NAMES.add("GoodTimesWithScar");
-        PLAYER_NAMES.add("BdoubleO100");
-        PLAYER_NAMES.add("Etho");
-        PLAYER_NAMES.add("VintageBeef");
-        PLAYER_NAMES.add("PewDiePie");
-        PLAYER_NAMES.add("Markiplier");
-        PLAYER_NAMES.add("Jacksepticeye");
-        PLAYER_NAMES.add("Skeppy");
-        PLAYER_NAMES.add("BadBoyHalo");
-        PLAYER_NAMES.add("awesamdude");
-        PLAYER_NAMES.add("Quackity");
-        PLAYER_NAMES.add("KarlJacobs");
-        PLAYER_NAMES.add("Foolish_Gamers");
-        PLAYER_NAMES.add("Punz");
-        PLAYER_NAMES.add("Ponk");
-        PLAYER_NAMES.add("Antfrost");
-        PLAYER_NAMES.add("Callahan");
-        PLAYER_NAMES.add("Eret");
-        PLAYER_NAMES.add("HBomb94");
-        PLAYER_NAMES.add("Nihachu");
-        PLAYER_NAMES.add("Purpled");
-        PLAYER_NAMES.add("5up");
-        PLAYER_NAMES.add("Fundy");
-        PLAYER_NAMES.add("ConnorEatsPants");
-        PLAYER_NAMES.add("CptPuffy");
-        PLAYER_NAMES.add("Niki");
-        PLAYER_NAMES.add("JackManifoldTV");
-        PLAYER_NAMES.add("Slimecicle");
+    // Cache des pseudos qui n'existent PAS (pour éviter de les retester)
+    private static final Set<String> NON_EXISTENT_USERNAMES = ConcurrentHashMap.newKeySet();
 
-        // === SPEEDRUNNERS ET COMPÉTITEURS ===
-        PLAYER_NAMES.add("Illumina");
-        PLAYER_NAMES.add("Fruitberries");
-        PLAYER_NAMES.add("TapL");
-        PLAYER_NAMES.add("Couriway");
-        PLAYER_NAMES.add("Benex");
-
-        // === BUILDERS ET CRÉATEURS ===
-        PLAYER_NAMES.add("fWhip");
-        PLAYER_NAMES.add("GeminiTay");
-        PLAYER_NAMES.add("SmallishBeans");
-        PLAYER_NAMES.add("LDShadowLady");
-        PLAYER_NAMES.add("Shubble");
-        PLAYER_NAMES.add("SolidarityGaming");
-        PLAYER_NAMES.add("Pixlriffs");
-
-        // === JOUEURS AVEC SKINS VARIÉS ===
-        // Ajout de pseudos génériques courants pour plus de variété
-        PLAYER_NAMES.add("Steve");
-        PLAYER_NAMES.add("Alex");
-        PLAYER_NAMES.add("Herobrine");
-        PLAYER_NAMES.add("xNestorio");
-        PLAYER_NAMES.add("Huahwi");
-        PLAYER_NAMES.add("CraftBattleDuty");
-        PLAYER_NAMES.add("AciDic_BliTzz");
-        PLAYER_NAMES.add("Grapeapplesauce");
-        PLAYER_NAMES.add("xRpMx13");
-        PLAYER_NAMES.add("Strafeshot");
-        PLAYER_NAMES.add("Cayorion");
-        PLAYER_NAMES.add("Bashurverse");
-        PLAYER_NAMES.add("SkyDoesMinecraft");
-        PLAYER_NAMES.add("PopularMMOs");
-        PLAYER_NAMES.add("GamingWithJen");
-        PLAYER_NAMES.add("SSundee");
-        PLAYER_NAMES.add("CrainerGames");
-        PLAYER_NAMES.add("Lachlan");
-        PLAYER_NAMES.add("PrestonPlayz");
-        PLAYER_NAMES.add("MrWoofless");
-        PLAYER_NAMES.add("BajanCanadian");
-        PLAYER_NAMES.add("JeromeASF");
-        PLAYER_NAMES.add("Vikkstar123");
-        PLAYER_NAMES.add("Lachlan");
-        PLAYER_NAMES.add("NoahCraftFTW");
-
-        // === JOUEURS FRANÇAIS POPULAIRES ===
-        PLAYER_NAMES.add("Aypierre");
-        PLAYER_NAMES.add("FuzeIII");
-        PLAYER_NAMES.add("Locklear");
-        PLAYER_NAMES.add("Baghera_Jones");
-        PLAYER_NAMES.add("Etoiles");
-        PLAYER_NAMES.add("Domingo");
-        PLAYER_NAMES.add("Kameto");
-        PLAYER_NAMES.add("Squeezie");
-        PLAYER_NAMES.add("Gotaga");
-        PLAYER_NAMES.add("Michou");
-        PLAYER_NAMES.add("Inoxtag");
-
-        com.aibrigade.main.AIBrigadeMod.LOGGER.info("MojangSkinFetcher initialized with {} player names", PLAYER_NAMES.size());
-    }
+    // Statistiques
+    private static int totalAttempts = 0;
+    private static int successfulFinds = 0;
+    private static int failedAttempts = 0;
 
     /**
      * Récupère un GameProfile complet avec skin depuis l'UUID
@@ -247,12 +143,25 @@ public class MojangSkinFetcher {
     /**
      * Convertit un nom de joueur en UUID via l'API Mojang
      * Utilise le cache si disponible
+     * Vérifie que le joueur existe
+     *
+     * @param username Le pseudo du joueur
+     * @return CompletableFuture<UUID> ou null si le joueur n'existe pas
      */
     public static CompletableFuture<UUID> getUUIDFromUsername(String username) {
         return CompletableFuture.supplyAsync(() -> {
-            // Vérifier le cache
+            totalAttempts++;
+
+            // Vérifier le cache positif
             if (NAME_TO_UUID_CACHE.containsKey(username.toLowerCase())) {
+                successfulFinds++;
                 return NAME_TO_UUID_CACHE.get(username.toLowerCase());
+            }
+
+            // Vérifier le cache négatif
+            if (NON_EXISTENT_USERNAMES.contains(username.toLowerCase())) {
+                failedAttempts++;
+                return null;
             }
 
             try {
@@ -266,8 +175,17 @@ public class MojangSkinFetcher {
                 connection.setReadTimeout(5000);
 
                 int responseCode = connection.getResponseCode();
+                if (responseCode == 204 || responseCode == 404) {
+                    // Le joueur n'existe pas
+                    NON_EXISTENT_USERNAMES.add(username.toLowerCase());
+                    failedAttempts++;
+                    com.aibrigade.main.AIBrigadeMod.LOGGER.debug("Player {} does not exist", username);
+                    return null;
+                }
+
                 if (responseCode != 200) {
-                    com.aibrigade.main.AIBrigadeMod.LOGGER.warn("Player {} not found (HTTP {})", username, responseCode);
+                    com.aibrigade.main.AIBrigadeMod.LOGGER.warn("Player {} check failed (HTTP {})", username, responseCode);
+                    failedAttempts++;
                     return null;
                 }
 
@@ -294,14 +212,51 @@ public class MojangSkinFetcher {
 
                 // Mettre en cache
                 NAME_TO_UUID_CACHE.put(username.toLowerCase(), uuid);
+                VERIFIED_USERNAMES.add(username);
+                successfulFinds++;
 
-                com.aibrigade.main.AIBrigadeMod.LOGGER.debug("Resolved {} to UUID {}", username, uuid);
+                com.aibrigade.main.AIBrigadeMod.LOGGER.info("✓ Verified player: {} (UUID: {})", username, uuid);
                 return uuid;
 
             } catch (Exception e) {
-                com.aibrigade.main.AIBrigadeMod.LOGGER.error("Error resolving username {}: {}", username, e.getMessage());
+                com.aibrigade.main.AIBrigadeMod.LOGGER.error("Error checking username {}: {}", username, e.getMessage());
+                failedAttempts++;
                 return null;
             }
+        }, Util.backgroundExecutor());
+    }
+
+    /**
+     * Trouve un joueur aléatoire qui existe vraiment
+     * Génère des pseudos aléatoires et vérifie leur existence
+     *
+     * @param maxAttempts Nombre maximum de tentatives
+     * @return CompletableFuture<String> contenant le pseudo trouvé ou null
+     */
+    public static CompletableFuture<String> findRandomExistingPlayer(int maxAttempts) {
+        return CompletableFuture.supplyAsync(() -> {
+            int attempts = 0;
+
+            while (attempts < maxAttempts) {
+                // Générer un pseudo aléatoire
+                String randomUsername = RandomUsernameGenerator.generateValidMinecraftUsername();
+
+                // Vérifier s'il existe (de manière synchrone pour cette opération)
+                try {
+                    UUID uuid = getUUIDFromUsername(randomUsername).get();
+                    if (uuid != null) {
+                        com.aibrigade.main.AIBrigadeMod.LOGGER.info("Found existing player: {} after {} attempts", randomUsername, attempts + 1);
+                        return randomUsername;
+                    }
+                } catch (Exception e) {
+                    com.aibrigade.main.AIBrigadeMod.LOGGER.debug("Attempt {}: {} does not exist", attempts + 1, randomUsername);
+                }
+
+                attempts++;
+            }
+
+            com.aibrigade.main.AIBrigadeMod.LOGGER.warn("Could not find existing player after {} attempts", maxAttempts);
+            return null;
         }, Util.backgroundExecutor());
     }
 
@@ -328,48 +283,6 @@ public class MojangSkinFetcher {
         // Utiliser le skin de Steve par défaut
         GameProfile profile = new GameProfile(uuid, "Bot_" + uuid.toString().substring(0, 8));
         return profile;
-    }
-
-    /**
-     * Récupère un nom de joueur aléatoire de la base de données
-     * Garantit que chaque bot ait un pseudo unique
-     */
-    public static String getRandomPlayerName() {
-        if (PLAYER_NAMES.isEmpty()) {
-            return "Bot_" + UUID.randomUUID().toString().substring(0, 8);
-        }
-
-        // Sélectionner un nom aléatoire
-        Random random = new Random();
-        return PLAYER_NAMES.get(random.nextInt(PLAYER_NAMES.size()));
-    }
-
-    /**
-     * Récupère un UUID aléatoire de joueur (non utilisé)
-     * Garantit que chaque bot ait un pseudo unique
-     */
-    public static CompletableFuture<UUID> getRandomPlayerUUIDAsync() {
-        String randomName = getRandomPlayerName();
-
-        return getUUIDFromUsername(randomName).thenApply(uuid -> {
-            if (uuid == null) {
-                // Si le nom n'existe pas, essayer un autre
-                com.aibrigade.main.AIBrigadeMod.LOGGER.warn("Player {} does not exist, trying another...", randomName);
-                return null;
-            }
-
-            // Vérifier si déjà utilisé
-            if (USED_PLAYER_UUIDS.contains(uuid)) {
-                // Si tous sont utilisés, recycler
-                if (USED_PLAYER_UUIDS.size() >= PLAYER_NAMES.size()) {
-                    com.aibrigade.main.AIBrigadeMod.LOGGER.info("All player UUIDs used, recycling...");
-                    USED_PLAYER_UUIDS.clear();
-                }
-            }
-
-            USED_PLAYER_UUIDS.add(uuid);
-            return uuid;
-        });
     }
 
     /**
@@ -431,45 +344,67 @@ public class MojangSkinFetcher {
 
     /**
      * Récupère et applique un skin aléatoire à un bot
-     * Utilise la large base de données de joueurs populaires
+     * Génère des pseudos aléatoires et trouve un qui existe vraiment
      */
     public static void applyRandomFamousSkin(BotEntity bot) {
-        // Sélectionner un nom aléatoire
-        String randomName = getRandomPlayerName();
-
-        com.aibrigade.main.AIBrigadeMod.LOGGER.info("Fetching skin for bot using player: {}", randomName);
+        com.aibrigade.main.AIBrigadeMod.LOGGER.info("Searching for random existing player for bot...");
 
         // Appliquer un nom temporaire
-        bot.setBotName(randomName + "_Loading");
+        bot.setBotName("Searching_Player");
 
-        // Récupérer l'UUID de manière asynchrone
-        getUUIDFromUsername(randomName).thenAccept(uuid -> {
-            if (uuid == null) {
-                // Fallback si le joueur n'existe pas
-                com.aibrigade.main.AIBrigadeMod.LOGGER.warn("Player {} not found, using fallback", randomName);
+        // Chercher un joueur existant (max 20 tentatives)
+        findRandomExistingPlayer(20).thenAccept(username -> {
+            if (username == null) {
+                // Fallback : utiliser un nom généré
+                com.aibrigade.main.AIBrigadeMod.LOGGER.warn("Could not find existing player, using fallback");
                 UUID fallbackUUID = UUID.randomUUID();
                 bot.setPlayerUUID(fallbackUUID);
                 bot.setBotName("Bot_" + fallbackUUID.toString().substring(0, 8));
                 return;
             }
 
-            // Marquer comme utilisé
-            USED_PLAYER_UUIDS.add(uuid);
-
-            // Appliquer l'UUID
-            bot.setPlayerUUID(uuid);
-            bot.setBotName(randomName);
-
-            com.aibrigade.main.AIBrigadeMod.LOGGER.info("Bot configured with player: {} ({})", randomName, uuid);
-
-            // Fetch le profil complet en arrière-plan pour les textures
-            fetchProfileAsync(uuid).thenAccept(profile -> {
-                if (profile != null) {
-                    // Mettre à jour avec le vrai nom du joueur (au cas où il a changé)
-                    bot.setBotName(profile.getName());
-                    com.aibrigade.main.AIBrigadeMod.LOGGER.info("Full profile fetched for: {}", profile.getName());
+            // Récupérer l'UUID du joueur trouvé
+            getUUIDFromUsername(username).thenAccept(uuid -> {
+                if (uuid == null) {
+                    // Ne devrait pas arriver car on a déjà vérifié
+                    com.aibrigade.main.AIBrigadeMod.LOGGER.error("UUID became null for {}", username);
+                    UUID fallbackUUID = UUID.randomUUID();
+                    bot.setPlayerUUID(fallbackUUID);
+                    bot.setBotName("Bot_" + fallbackUUID.toString().substring(0, 8));
+                    return;
                 }
+
+                // Marquer comme utilisé
+                USED_PLAYER_UUIDS.add(uuid);
+
+                // Appliquer l'UUID et le nom
+                bot.setPlayerUUID(uuid);
+                bot.setBotName(username);
+
+                com.aibrigade.main.AIBrigadeMod.LOGGER.info("✓ Bot configured with verified player: {} ({})", username, uuid);
+
+                // Fetch le profil complet en arrière-plan pour les textures
+                fetchProfileAsync(uuid).thenAccept(profile -> {
+                    if (profile != null) {
+                        com.aibrigade.main.AIBrigadeMod.LOGGER.info("✓ Skin loaded for: {}", profile.getName());
+                    }
+                });
             });
         });
+    }
+
+    /**
+     * Affiche les statistiques de recherche de joueurs
+     */
+    public static void printStatistics() {
+        double successRate = totalAttempts > 0 ? (successfulFinds * 100.0 / totalAttempts) : 0;
+
+        com.aibrigade.main.AIBrigadeMod.LOGGER.info("=== MojangSkinFetcher Statistics ===");
+        com.aibrigade.main.AIBrigadeMod.LOGGER.info("Total attempts: {}", totalAttempts);
+        com.aibrigade.main.AIBrigadeMod.LOGGER.info("Successful finds: {}", successfulFinds);
+        com.aibrigade.main.AIBrigadeMod.LOGGER.info("Failed attempts: {}", failedAttempts);
+        com.aibrigade.main.AIBrigadeMod.LOGGER.info("Success rate: {:.2f}%", successRate);
+        com.aibrigade.main.AIBrigadeMod.LOGGER.info("Verified usernames cached: {}", VERIFIED_USERNAMES.size());
+        com.aibrigade.main.AIBrigadeMod.LOGGER.info("Non-existent usernames cached: {}", NON_EXISTENT_USERNAMES.size());
     }
 }

@@ -262,17 +262,28 @@ public class BotManager {
 
         group.setLeaderName(leaderName);
 
+        // Find leader UUID (player or bot)
+        UUID leaderId = null;
+
         // Update all bots in group - copy set to avoid concurrent modification
         for (UUID botId : new HashSet<>(group.getBotIds())) {
             BotEntity bot = activeBots.get(botId);
             if (bot != null) {
-                // TODO: Find leader UUID and assign
-                // UUID leaderId = findLeaderUUID(bot.level(), leaderName);
-                // bot.setLeaderId(leaderId);
+                // Find leader UUID on first iteration (using first bot's level)
+                if (leaderId == null) {
+                    leaderId = findLeaderUUID(bot.level(), leaderName);
+                    if (leaderId == null) {
+                        AIBrigadeMod.LOGGER.warn("Leader '{}' not found (not a player or bot)", leaderName);
+                        return false;
+                    }
+                }
+
+                // Assign leader to this bot
+                bot.setLeaderId(leaderId);
             }
         }
 
-        AIBrigadeMod.LOGGER.info("Assigned leader {} to group {}", leaderName, groupName);
+        AIBrigadeMod.LOGGER.info("Assigned leader {} (UUID: {}) to group {}", leaderName, leaderId, groupName);
         return true;
     }
 

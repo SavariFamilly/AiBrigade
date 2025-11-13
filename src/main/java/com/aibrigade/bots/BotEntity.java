@@ -4,6 +4,7 @@ import com.aibrigade.ai.RealisticFollowLeaderGoal;
 import com.aibrigade.ai.ActiveGazeBehavior;
 import com.aibrigade.ai.TeamAwareAttackGoal;
 import com.aibrigade.ai.PlaceBlockToReachTargetGoal;
+import com.aibrigade.ai.RandomJumpGoal;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
@@ -83,6 +84,8 @@ public class BotEntity extends PathfinderMob {
         SynchedEntityData.defineId(BotEntity.class, EntityDataSerializers.OPTIONAL_UUID);
     private static final EntityDataAccessor<Boolean> CAN_PLACE_BLOCKS =
         SynchedEntityData.defineId(BotEntity.class, EntityDataSerializers.BOOLEAN);
+    private static final EntityDataAccessor<Boolean> FORCED_JUMPING =
+        SynchedEntityData.defineId(BotEntity.class, EntityDataSerializers.BOOLEAN);
 
     // Bot properties
     private UUID leaderId; // UUID of the leader (player or bot)
@@ -147,6 +150,7 @@ public class BotEntity extends PathfinderMob {
         this.entityData.define(IS_FOLLOWING_LEADER, false);
         this.entityData.define(PLAYER_UUID, java.util.Optional.empty());
         this.entityData.define(CAN_PLACE_BLOCKS, true);
+        this.entityData.define(FORCED_JUMPING, false);
     }
 
     /**
@@ -196,6 +200,9 @@ public class BotEntity extends PathfinderMob {
 
         // Priorité 7: Random look around
         this.goalSelector.addGoal(7, new net.minecraft.world.entity.ai.goal.RandomLookAroundGoal(this));
+
+        // Priorité 8: Random jump (2-30 minutes intervals, or forced continuous)
+        this.goalSelector.addGoal(8, new RandomJumpGoal(this));
 
         // Add TEAM-AWARE attack target selectors (won't attack teammates)
         this.targetSelector.addGoal(1, new net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal(this));
@@ -468,6 +475,22 @@ public class BotEntity extends PathfinderMob {
     }
 
     /**
+     * Check if the bot is forced to jump continuously
+     * @return true if forced jumping is enabled
+     */
+    public boolean isForcedJumping() {
+        return this.entityData.get(FORCED_JUMPING);
+    }
+
+    /**
+     * Set forced jumping mode
+     * @param forced true to enable continuous jumping
+     */
+    public void setForcedJumping(boolean forced) {
+        this.entityData.set(FORCED_JUMPING, forced);
+    }
+
+    /**
      * Get the bot's behavior configuration
      * @return The behavior config
      */
@@ -580,6 +603,9 @@ public class BotEntity extends PathfinderMob {
         // Save building toggle (from synced data)
         tag.putBoolean("CanPlaceBlocks", canPlaceBlocks());
 
+        // Save forced jumping state
+        tag.putBoolean("ForcedJumping", isForcedJumping());
+
         // Save behavior config
         if (behaviorConfig != null) {
             tag.put("BehaviorConfig", behaviorConfig.saveToNBT());
@@ -642,6 +668,11 @@ public class BotEntity extends PathfinderMob {
             setCanPlaceBlocks(tag.getBoolean("CanPlaceBlocks"));
         }
 
+        // Load forced jumping state
+        if (tag.contains("ForcedJumping")) {
+            setForcedJumping(tag.getBoolean("ForcedJumping"));
+        }
+
         // Load behavior config
         if (tag.contains("BehaviorConfig")) {
             if (behaviorConfig == null) {
@@ -692,6 +723,47 @@ public class BotEntity extends PathfinderMob {
     @Override
     public boolean isPersistenceRequired() {
         return true; // Bots ALWAYS persist
+    }
+
+    /**
+     * Called when the bot takes damage
+     * Implements individual hostile response when attacked by a player
+     */
+    @Override
+    public boolean hurt(net.minecraft.world.damagesource.DamageSource source, float amount) {
+        // Call parent to apply damage
+        boolean result = super.hurt(source, amount);
+
+        // If damaged by a player, make THIS bot (not the whole group) hostile to that player
+        if (source.getEntity() instanceof Player) {
+            Player attacker = (Player) source.getEntity();
+
+            // Don't become hostile to your own leader
+            UUID leaderId = this.getLeaderId();
+            if (leaderId != null && attacker.getUUID().equals(leaderId)) {
+                return result;
+            }
+
+            // Set this specific bot as hostile
+            this.setHostile(true);
+
+            // Set relationship: this bot's group is hostile to the attacking player
+            // But this only affects THIS bot because it's an individual relationship
+            String botGroup = this.getGroupId();
+            if (botGroup != null && !botGroup.isEmpty()) {
+                com.aibrigade.main.AIBrigadeMod.getBotManager()
+                    .setPlayerGroupRelationship(attacker.getUUID(), botGroup,
+                        com.aibrigade.bots.TeamRelationship.HOSTILE);
+            }
+
+            // Set the attacker as target
+            this.setTarget(attacker);
+
+            com.aibrigade.main.AIBrigadeMod.LOGGER.debug("Bot {} is now hostile to player {} after being attacked",
+                this.getBotName(), attacker.getName().getString());
+        }
+
+        return result;
     }
 
     /**

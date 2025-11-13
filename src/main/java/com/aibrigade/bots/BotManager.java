@@ -339,6 +339,54 @@ public class BotManager {
     }
 
     /**
+     * Make a group hostile towards a target (either another group or a player)
+     * Automatically detects if the target is a player name or group name
+     *
+     * @param sourceGroup The group becoming hostile
+     * @param targetName The target name (player or group)
+     * @param server The server instance to lookup players
+     * @return true if successful, false if sourceGroup not found or target invalid
+     */
+    public boolean setGroupHostileToTarget(String sourceGroup, String targetName, MinecraftServer server) {
+        // Check if source group exists
+        if (!botGroups.containsKey(sourceGroup)) {
+            AIBrigadeMod.LOGGER.warn("Source group '{}' not found", sourceGroup);
+            return false;
+        }
+
+        // Try to interpret target as a player first
+        Player targetPlayer = server.getPlayerList().getPlayerByName(targetName);
+        if (targetPlayer != null) {
+            // Target is a player - set all bots in sourceGroup hostile to this player
+            BotGroup group = botGroups.get(sourceGroup);
+            for (UUID botId : new HashSet<>(group.getBotIds())) {
+                BotEntity bot = activeBots.get(botId);
+                if (bot != null) {
+                    // Set hostile flag for bot
+                    bot.setHostile(true);
+                }
+            }
+
+            // Set player-group relationship
+            setPlayerGroupRelationship(targetPlayer.getUUID(), sourceGroup, TeamRelationship.HOSTILE);
+            AIBrigadeMod.LOGGER.info("Group '{}' is now hostile towards player '{}'", sourceGroup, targetName);
+            return true;
+        }
+
+        // Try to interpret target as a group
+        if (botGroups.containsKey(targetName)) {
+            // Target is a group - set group-to-group relationship
+            setGroupHostile(sourceGroup, targetName);
+            AIBrigadeMod.LOGGER.info("Group '{}' is now hostile towards group '{}'", sourceGroup, targetName);
+            return true;
+        }
+
+        // Target not found as either player or group
+        AIBrigadeMod.LOGGER.warn("Target '{}' not found (not a player or group)", targetName);
+        return false;
+    }
+
+    /**
      * Check if two groups are hostile
      *
      * @param group1 First group
@@ -492,6 +540,49 @@ public class BotManager {
     public boolean setFollowLeader(String targetName, boolean enabled) {
         // Use default radius of 10.0f
         return setFollowLeader(targetName, enabled, 10.0f);
+    }
+
+    /**
+     * Toggle forced jumping for a bot or group
+     * When enabled, bots jump continuously instead of at random intervals
+     *
+     * @param targetName Bot name or group name
+     * @return Number of bots affected, 0 if target not found
+     */
+    public int toggleForcedJumping(String targetName) {
+        int affected = 0;
+
+        // Check if target is a group
+        if (botGroups.containsKey(targetName)) {
+            BotGroup group = botGroups.get(targetName);
+
+            // Toggle for all bots in group - copy set to avoid concurrent modification
+            for (UUID botId : new HashSet<>(group.getBotIds())) {
+                BotEntity bot = activeBots.get(botId);
+                if (bot != null) {
+                    // Toggle the state
+                    boolean currentState = bot.isForcedJumping();
+                    bot.setForcedJumping(!currentState);
+                    affected++;
+                }
+            }
+
+            AIBrigadeMod.LOGGER.info("Toggled forced jumping for {} bots in group '{}'", affected, targetName);
+            return affected;
+        } else {
+            // Try to find individual bot by name
+            BotEntity bot = findBotByName(targetName);
+            if (bot != null) {
+                boolean currentState = bot.isForcedJumping();
+                bot.setForcedJumping(!currentState);
+                AIBrigadeMod.LOGGER.info("Toggled forced jumping for bot '{}' (now: {})",
+                    targetName, !currentState);
+                return 1;
+            }
+        }
+
+        AIBrigadeMod.LOGGER.warn("Target '{}' not found for toggleForcedJumping", targetName);
+        return 0;
     }
 
     /**

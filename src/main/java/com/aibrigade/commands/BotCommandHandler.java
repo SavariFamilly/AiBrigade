@@ -103,6 +103,10 @@ public class BotCommandHandler {
                 .then(Commands.argument("target", StringArgumentType.string())
                     .executes(BotCommandHandler::toggleStatic)))
 
+            .then(Commands.literal("togglejump")
+                .then(Commands.argument("target", StringArgumentType.string())
+                    .executes(BotCommandHandler::toggleJump)))
+
             .then(Commands.literal("removebot")
                 .then(Commands.argument("botName", StringArgumentType.string())
                     .executes(BotCommandHandler::removeBot)))
@@ -226,11 +230,11 @@ public class BotCommandHandler {
 
     /**
      * Command: /aibrigade hostile
-     * Makes one group hostile towards another
+     * Makes one group hostile towards another group OR towards a specific player
      */
     private static int setHostile(CommandContext<CommandSourceStack> context) {
         String sourceGroup = StringArgumentType.getString(context, "sourceGroup");
-        String targetGroup = StringArgumentType.getString(context, "targetGroup");
+        String target = StringArgumentType.getString(context, "targetGroup");
 
         BotManager botManager = AIBrigadeMod.getBotManager();
         if (botManager == null) {
@@ -238,13 +242,19 @@ public class BotCommandHandler {
             return 0;
         }
 
-        botManager.setGroupHostile(sourceGroup, targetGroup);
+        // Try to set hostility (will detect if target is a player or group)
+        boolean success = botManager.setGroupHostileToTarget(sourceGroup, target, context.getSource().getServer());
 
-        context.getSource().sendSuccess(() ->
-            Component.literal("Group '" + sourceGroup + "' is now hostile towards '" + targetGroup + "'"),
-            true);
-
-        return 1;
+        if (success) {
+            context.getSource().sendSuccess(() ->
+                Component.literal("Group '" + sourceGroup + "' is now hostile towards '" + target + "'"),
+                true);
+            return 1;
+        } else {
+            context.getSource().sendFailure(Component.literal(
+                "Failed: Group '" + sourceGroup + "' not found, or target '" + target + "' is neither a group nor an online player"));
+            return 0;
+        }
     }
 
     /**
@@ -405,6 +415,33 @@ public class BotCommandHandler {
             true);
 
         return 1;
+    }
+
+    /**
+     * Command: /aibrigade togglejump
+     * Toggles forced jumping for bot or group
+     */
+    private static int toggleJump(CommandContext<CommandSourceStack> context) {
+        String target = StringArgumentType.getString(context, "target");
+
+        BotManager botManager = AIBrigadeMod.getBotManager();
+        if (botManager == null) {
+            context.getSource().sendFailure(Component.literal("Bot manager not initialized"));
+            return 0;
+        }
+
+        int affected = botManager.toggleForcedJumping(target);
+
+        if (affected > 0) {
+            int finalAffected = affected;
+            context.getSource().sendSuccess(() ->
+                Component.literal("Toggled forced jumping for " + finalAffected + " bot(s) in '" + target + "'"),
+                true);
+            return affected;
+        } else {
+            context.getSource().sendFailure(Component.literal("Target '" + target + "' not found"));
+            return 0;
+        }
     }
 
     /**
@@ -593,6 +630,7 @@ public class BotCommandHandler {
             /aibrigade setbehavior <target> <behavior>
             /aibrigade setradius <groupName> <radius>
             /aibrigade togglestatic <target>
+            /aibrigade togglejump <target> - Toggle continuous jumping
             /aibrigade removebot <botName>
             /aibrigade removegroup <groupName>
             /aibrigade groupinfo <groupName>

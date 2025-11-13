@@ -304,17 +304,33 @@ public class BotCommandHandler {
             return 0;
         }
 
+        // Get group info for diagnostics
+        BotManager.BotGroup group = botManager.getBotGroups().get(groupName);
+        if (group == null) {
+            context.getSource().sendFailure(Component.literal("Group '" + groupName + "' not found"));
+            return 0;
+        }
+
         boolean success = botManager.setFollowLeader(groupName, enabled, radius);
 
         if (success) {
             context.getSource().sendSuccess(() ->
                 Component.literal("Follow leader mode " + (enabled ? "enabled" : "disabled") +
                     " for group '" + groupName + "' with radius " + radius +
-                    "\n§7(5/6 bots follow in radius, 1/6 follow actively)"),
+                    "\n§7(5/6 bots follow in radius, 1/6 follow actively)" +
+                    "\n§eCheck server logs for any warnings!"),
                 true);
+
+            // Send helpful reminder about common issues
+            context.getSource().sendSuccess(() ->
+                Component.literal("§6Troubleshooting if bots don't move:" +
+                    "\n§7- Are bots in STATIC mode? Use: §f/aibrigade togglestatic " + groupName +
+                    "\n§7- Do bots have a leader? Use: §f/aibrigade assignleader " + groupName + " <playerName>" +
+                    "\n§7- Check bot info: §f/aibrigade groupinfo " + groupName),
+                false);
             return 1;
         } else {
-            context.getSource().sendFailure(Component.literal("Failed to set follow leader - group not found"));
+            context.getSource().sendFailure(Component.literal("Failed to set follow leader - check server logs"));
             return 0;
         }
     }

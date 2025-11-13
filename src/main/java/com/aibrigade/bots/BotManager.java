@@ -486,6 +486,7 @@ public class BotManager {
             BotGroup group = botGroups.get(groupName);
             Set<UUID> groupBots = group.getBotIds();
             if (groupBots.isEmpty()) {
+                AIBrigadeMod.LOGGER.warn("Group '{}' has no bots", groupName);
                 return false;
             }
 
@@ -494,12 +495,28 @@ public class BotManager {
 
             // Set follow leader for all bots in group - copy set to avoid concurrent modification
             int count = 0;
+            int withoutLeader = 0;
+            int staticBots = 0;
             int activeFollowers = 0;
             int radiusFollowers = 0;
 
             for (UUID botUUID : new HashSet<>(groupBots)) {
                 BotEntity bot = activeBots.get(botUUID);
                 if (bot != null) {
+                    // Check if bot has a leader assigned
+                    if (bot.getLeaderId() == null) {
+                        withoutLeader++;
+                        AIBrigadeMod.LOGGER.warn("Bot {} in group '{}' has no leader assigned! Use /aibrigade assignleader first.",
+                            bot.getBotName(), groupName);
+                    }
+
+                    // Check if bot is static
+                    if (bot.isStatic()) {
+                        staticBots++;
+                        AIBrigadeMod.LOGGER.warn("Bot {} is in STATIC mode and cannot follow! Use /aibrigade togglestatic to enable movement.",
+                            bot.getBotName());
+                    }
+
                     bot.setFollowingLeader(enabled);
                     bot.setFollowRadius(radius);
                     count++;
@@ -521,6 +538,17 @@ public class BotManager {
                 "(estimated: ~{} active followers, ~{} radius-based followers)",
                 enabled ? "enabled" : "disabled", count, groupName, radius,
                 activeFollowers, radiusFollowers);
+
+            // Log warnings summary
+            if (withoutLeader > 0) {
+                AIBrigadeMod.LOGGER.warn("WARNING: {} bot(s) have no leader assigned! They won't follow anyone.", withoutLeader);
+                AIBrigadeMod.LOGGER.warn("Fix: Use /aibrigade assignleader {} <playerName>", groupName);
+            }
+            if (staticBots > 0) {
+                AIBrigadeMod.LOGGER.warn("WARNING: {} bot(s) are in STATIC mode and cannot move!", staticBots);
+                AIBrigadeMod.LOGGER.warn("Fix: Use /aibrigade togglestatic {} to allow movement", groupName);
+            }
+
             return count > 0;
         }
 

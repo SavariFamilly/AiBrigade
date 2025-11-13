@@ -31,6 +31,7 @@ public class AIManager {
     // AI tick counter (for performance optimization)
     private int tickCounter = 0;
     private static final int AI_UPDATE_INTERVAL = 4; // Update AI every 4 ticks
+    private static final int CLEANUP_INTERVAL = 100; // Cleanup dead bots every 100 ticks (5 seconds)
 
     // Server reference
     private MinecraftServer server;
@@ -101,6 +102,22 @@ public class AIManager {
         // Only update AI every N ticks for performance
         if (tickCounter % AI_UPDATE_INTERVAL == 0) {
             updateAllBotAI();
+        }
+
+        // Cleanup dead bots periodically (every 5 seconds)
+        if (tickCounter % CLEANUP_INTERVAL == 0) {
+            cleanupDeadBots();
+        }
+    }
+
+    /**
+     * Cleanup dead or invalid bots from the manager
+     * Called every CLEANUP_INTERVAL ticks to ensure dead bots don't block spawns
+     */
+    private void cleanupDeadBots() {
+        BotManager botManager = AIBrigadeMod.getBotManager();
+        if (botManager != null) {
+            botManager.cleanupDeadBots();
         }
     }
 

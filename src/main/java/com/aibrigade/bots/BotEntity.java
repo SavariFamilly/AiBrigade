@@ -1,5 +1,10 @@
 package com.aibrigade.bots;
 
+import com.aibrigade.ai.FollowLeaderGoal;
+import com.aibrigade.ai.RealisticFollowLeaderGoal;
+import com.aibrigade.ai.ActiveGazeBehavior;
+import com.aibrigade.ai.TeamAwareAttackGoal;
+import com.aibrigade.ai.PlaceBlockToReachTargetGoal;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
@@ -14,14 +19,15 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.core.BlockPos;
 import org.jetbrains.annotations.Nullable;
-import software.bernie.geckolib.animatable.GeoEntity;
-import software.bernie.geckolib.core.animatable.instance.AnimatableInstanceCache;
-import software.bernie.geckolib.core.animation.AnimatableManager;
-import software.bernie.geckolib.core.animation.AnimationController;
-import software.bernie.geckolib.core.animation.AnimationState;
-import software.bernie.geckolib.core.animation.RawAnimation;
-import software.bernie.geckolib.core.object.PlayState;
-import software.bernie.geckolib.util.GeckoLibUtil;
+// GeckoLib animations will be added when dependency is resolved
+// import software.bernie.geckolib.animatable.GeoEntity;
+// import software.bernie.geckolib.core.animatable.instance.AnimatableInstanceCache;
+// import software.bernie.geckolib.core.animation.AnimatableManager;
+// import software.bernie.geckolib.core.animation.AnimationController;
+// import software.bernie.geckolib.core.animation.AnimationState;
+// import software.bernie.geckolib.core.animation.RawAnimation;
+// import software.bernie.geckolib.core.object.PlayState;
+// import software.bernie.geckolib.util.GeckoLibUtil;
 
 import java.util.UUID;
 
@@ -38,24 +44,24 @@ import java.util.UUID;
  * - Spawn position and home location
  * - GeckoLib animations (walk, run, attack, idle, etc.)
  *
- * Bots extend PathfinderMob to inherit advanced pathfinding capabilities
- * and implement GeoEntity for GeckoLib animation support.
+ * Bots extend PathfinderMob to inherit advanced pathfinding capabilities.
+ * GeckoLib animation support will be added when dependency is resolved.
  */
-public class BotEntity extends PathfinderMob implements GeoEntity {
+public class BotEntity extends PathfinderMob {
 
-    // GeckoLib animation cache
-    private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
+    // GeckoLib animation cache - will be restored when GeckoLib is available
+    // private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
 
-    // Animation definitions
-    private static final RawAnimation IDLE_ANIM = RawAnimation.begin().thenLoop("animation.bot.idle");
-    private static final RawAnimation WALK_ANIM = RawAnimation.begin().thenLoop("animation.bot.walk");
-    private static final RawAnimation RUN_ANIM = RawAnimation.begin().thenLoop("animation.bot.run");
-    private static final RawAnimation ATTACK_ANIM = RawAnimation.begin().thenPlay("animation.bot.attack");
-    private static final RawAnimation JUMP_ANIM = RawAnimation.begin().thenPlay("animation.bot.jump");
-    private static final RawAnimation CLIMB_ANIM = RawAnimation.begin().thenLoop("animation.bot.climb");
-    private static final RawAnimation SWIM_ANIM = RawAnimation.begin().thenLoop("animation.bot.swim");
-    private static final RawAnimation DAMAGED_ANIM = RawAnimation.begin().thenPlay("animation.bot.damaged");
-    private static final RawAnimation SNEAK_ANIM = RawAnimation.begin().thenLoop("animation.bot.sneak");
+    // Animation definitions - will be restored when GeckoLib is available
+    // private static final RawAnimation IDLE_ANIM = RawAnimation.begin().thenLoop("animation.bot.idle");
+    // private static final RawAnimation WALK_ANIM = RawAnimation.begin().thenLoop("animation.bot.walk");
+    // private static final RawAnimation RUN_ANIM = RawAnimation.begin().thenLoop("animation.bot.run");
+    // private static final RawAnimation ATTACK_ANIM = RawAnimation.begin().thenPlay("animation.bot.attack");
+    // private static final RawAnimation JUMP_ANIM = RawAnimation.begin().thenPlay("animation.bot.jump");
+    // private static final RawAnimation CLIMB_ANIM = RawAnimation.begin().thenLoop("animation.bot.climb");
+    // private static final RawAnimation SWIM_ANIM = RawAnimation.begin().thenLoop("animation.bot.swim");
+    // private static final RawAnimation DAMAGED_ANIM = RawAnimation.begin().thenPlay("animation.bot.damaged");
+    // private static final RawAnimation SNEAK_ANIM = RawAnimation.begin().thenLoop("animation.bot.sneak");
 
     // Data accessors for synced entity data
     private static final EntityDataAccessor<String> BOT_NAME =
@@ -70,6 +76,14 @@ public class BotEntity extends PathfinderMob implements GeoEntity {
         SynchedEntityData.defineId(BotEntity.class, EntityDataSerializers.BOOLEAN);
     private static final EntityDataAccessor<Float> FOLLOW_RADIUS =
         SynchedEntityData.defineId(BotEntity.class, EntityDataSerializers.FLOAT);
+    private static final EntityDataAccessor<Boolean> IS_HOSTILE =
+        SynchedEntityData.defineId(BotEntity.class, EntityDataSerializers.BOOLEAN);
+    private static final EntityDataAccessor<Boolean> IS_FOLLOWING_LEADER =
+        SynchedEntityData.defineId(BotEntity.class, EntityDataSerializers.BOOLEAN);
+    private static final EntityDataAccessor<java.util.Optional<UUID>> PLAYER_UUID =
+        SynchedEntityData.defineId(BotEntity.class, EntityDataSerializers.OPTIONAL_UUID);
+    private static final EntityDataAccessor<Boolean> CAN_PLACE_BLOCKS =
+        SynchedEntityData.defineId(BotEntity.class, EntityDataSerializers.BOOLEAN);
 
     // Bot properties
     private UUID leaderId; // UUID of the leader (player or bot)
@@ -78,6 +92,9 @@ public class BotEntity extends PathfinderMob implements GeoEntity {
     private BotAIState aiState;
     private BotRole role;
     private long spawnTime;
+
+    // Behavior configuration
+    private BotBehaviorConfig behaviorConfig;
 
     // Equipment and inventory
     private ItemStack[] armorSlots = new ItemStack[4]; // Head, chest, legs, boots
@@ -96,14 +113,27 @@ public class BotEntity extends PathfinderMob implements GeoEntity {
         this.role = BotRole.SOLDIER;
         this.spawnTime = System.currentTimeMillis();
 
+        // Initialize behavior config with default soldier preset
+        this.behaviorConfig = BotBehaviorConfig.createSoldier();
+
         // Initialize armor slots
         for (int i = 0; i < armorSlots.length; i++) {
             armorSlots[i] = ItemStack.EMPTY;
+        }
+
+        // Apply random Mojang skin and equipment
+        if (!level.isClientSide) {
+            // Appliquer un skin Mojang aléatoire avec vrai UUID
+            MojangSkinFetcher.applyRandomFamousSkin(this);
+
+            // Équiper un item complètement aléatoire (pioche, épée, blocs, nourriture, rien)
+            RandomEquipment.equipRandomItem(this);
         }
     }
 
     /**
      * Define synced entity data
+     * Minecraft 1.20.1 version
      */
     @Override
     protected void defineSynchedData() {
@@ -114,6 +144,10 @@ public class BotEntity extends PathfinderMob implements GeoEntity {
         this.entityData.define(BEHAVIOR_TYPE, "idle");
         this.entityData.define(IS_STATIC, false);
         this.entityData.define(FOLLOW_RADIUS, 10.0f);
+        this.entityData.define(IS_HOSTILE, false);
+        this.entityData.define(IS_FOLLOWING_LEADER, false);
+        this.entityData.define(PLAYER_UUID, java.util.Optional.empty());
+        this.entityData.define(CAN_PLACE_BLOCKS, true);
     }
 
     /**
@@ -125,8 +159,8 @@ public class BotEntity extends PathfinderMob implements GeoEntity {
     public static AttributeSupplier.Builder createAttributes() {
         return PathfinderMob.createMobAttributes()
             .add(Attributes.MAX_HEALTH, 20.0D)
-            .add(Attributes.MOVEMENT_SPEED, 0.3D)
-            .add(Attributes.ATTACK_DAMAGE, 2.0D)
+            .add(Attributes.MOVEMENT_SPEED, 0.35D) // Augmenté pour plus de mouvement
+            .add(Attributes.ATTACK_DAMAGE, 3.0D) // Augmenté pour combat
             .add(Attributes.ARMOR, 2.0D)
             .add(Attributes.FOLLOW_RANGE, 32.0D)
             .add(Attributes.KNOCKBACK_RESISTANCE, 0.0D);
@@ -139,8 +173,37 @@ public class BotEntity extends PathfinderMob implements GeoEntity {
     @Override
     protected void registerGoals() {
         super.registerGoals();
-        // Goals will be dynamically added by AIManager based on behavior type
-        // This allows for flexible behavior switching at runtime
+
+        // Priorité 0: Float in water
+        this.goalSelector.addGoal(0, new net.minecraft.world.entity.ai.goal.FloatGoal(this));
+
+        // Priorité 1: Active gaze behavior (regard actif 2/6 bots)
+        this.goalSelector.addGoal(1, new ActiveGazeBehavior(this));
+
+        // Priorité 2: Realistic follow leader (avec probabilités et variations)
+        this.goalSelector.addGoal(2, new RealisticFollowLeaderGoal(this, 1.1D, 3.0F, 10.0F));
+
+        // Priorité 3: Place blocks to reach target (avec toggle canPlaceBlocks)
+        this.goalSelector.addGoal(3, new PlaceBlockToReachTargetGoal(this));
+
+        // Priorité 4: Melee attack
+        this.goalSelector.addGoal(4, new net.minecraft.world.entity.ai.goal.MeleeAttackGoal(this, 1.2D, false));
+
+        // Priorité 5: Wander when idle
+        this.goalSelector.addGoal(5, new net.minecraft.world.entity.ai.goal.WaterAvoidingRandomStrollGoal(this, 0.8D));
+
+        // Priorité 6: Look at player (secondaire car ActiveGazeBehavior gère déjà)
+        this.goalSelector.addGoal(6, new net.minecraft.world.entity.ai.goal.LookAtPlayerGoal(this, Player.class, 8.0F));
+
+        // Priorité 7: Random look around
+        this.goalSelector.addGoal(7, new net.minecraft.world.entity.ai.goal.RandomLookAroundGoal(this));
+
+        // Add TEAM-AWARE attack target selectors (won't attack teammates)
+        this.targetSelector.addGoal(1, new net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal(this));
+        this.targetSelector.addGoal(2, TeamAwareAttackGoal.forPlayer(this)); // Only attack players if hostile & not leader
+        this.targetSelector.addGoal(3, TeamAwareAttackGoal.forBot(this)); // Only attack bots if hostile & not same team
+        this.targetSelector.addGoal(4, new net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal<>(
+            this, net.minecraft.world.entity.monster.Monster.class, true)); // Attack hostile mobs
     }
 
     // Getters and setters for bot properties
@@ -242,6 +305,46 @@ public class BotEntity extends PathfinderMob implements GeoEntity {
     }
 
     /**
+     * Check if the bot is in hostile mode
+     * @return true if hostile
+     */
+    public boolean isHostile() {
+        return this.entityData.get(IS_HOSTILE);
+    }
+
+    /**
+     * Set hostile mode
+     * @param hostile true to enable hostile mode
+     */
+    public void setHostile(boolean hostile) {
+        this.entityData.set(IS_HOSTILE, hostile);
+    }
+
+    /**
+     * Check if the bot is following its leader
+     * @return true if following leader
+     */
+    public boolean isFollowingLeader() {
+        return this.entityData.get(IS_FOLLOWING_LEADER);
+    }
+
+    /**
+     * Set follow leader mode
+     * @param following true to enable following
+     */
+    public void setFollowingLeader(boolean following) {
+        this.entityData.set(IS_FOLLOWING_LEADER, following);
+    }
+
+    /**
+     * Get the group ID (same as bot group)
+     * @return The group ID
+     */
+    public String getGroupId() {
+        return getBotGroup();
+    }
+
+    /**
      * Get the leader's UUID
      * @return Leader UUID or null
      */
@@ -332,16 +435,79 @@ public class BotEntity extends PathfinderMob implements GeoEntity {
     }
 
     /**
+     * Get the player UUID (for Mojang skin)
+     * @return The player UUID, or null if not set
+     */
+    public UUID getPlayerUUID() {
+        return this.entityData.get(PLAYER_UUID).orElse(null);
+    }
+
+    /**
+     * Set the player UUID (for Mojang skin)
+     * Synchronized across client and server
+     * @param uuid The player UUID
+     */
+    public void setPlayerUUID(UUID uuid) {
+        this.entityData.set(PLAYER_UUID, java.util.Optional.ofNullable(uuid));
+    }
+
+    /**
+     * Check if the bot can place blocks
+     * @return true if can place blocks
+     */
+    public boolean canPlaceBlocks() {
+        return this.entityData.get(CAN_PLACE_BLOCKS);
+    }
+
+    /**
+     * Set whether the bot can place blocks
+     * Synchronized across client and server
+     * @param canPlace true to allow block placement
+     */
+    public void setCanPlaceBlocks(boolean canPlace) {
+        this.entityData.set(CAN_PLACE_BLOCKS, canPlace);
+    }
+
+    /**
+     * Get the bot's behavior configuration
+     * @return The behavior config
+     */
+    public BotBehaviorConfig getBehaviorConfig() {
+        if (behaviorConfig == null) {
+            behaviorConfig = BotBehaviorConfig.createSoldier();
+        }
+        return behaviorConfig;
+    }
+
+    /**
+     * Set the bot's behavior configuration
+     * @param config The new configuration
+     */
+    public void setBehaviorConfig(BotBehaviorConfig config) {
+        this.behaviorConfig = config;
+    }
+
+    /**
      * Equip armor piece in specific slot
      *
-     * @param slot The armor slot (0=head, 1=chest, 2=legs, 3=boots)
+     * @param slot The armor slot (0=helmet, 1=chestplate, 2=leggings, 3=boots)
      * @param item The armor item
      */
     public void setArmorSlot(int slot, ItemStack item) {
         if (slot >= 0 && slot < 4) {
             armorSlots[slot] = item;
             // Update visual equipment
-            this.setItemSlot(EquipmentSlot.values()[slot + 2], item);
+            // Minecraft armor slots: FEET=0, LEGS=1, CHEST=2, HEAD=3
+            // Our slots: 0=helmet, 1=chestplate, 2=leggings, 3=boots
+            EquipmentSlot equipmentSlot;
+            switch (slot) {
+                case 0: equipmentSlot = EquipmentSlot.HEAD; break;
+                case 1: equipmentSlot = EquipmentSlot.CHEST; break;
+                case 2: equipmentSlot = EquipmentSlot.LEGS; break;
+                case 3: equipmentSlot = EquipmentSlot.FEET; break;
+                default: return;
+            }
+            this.setItemSlot(equipmentSlot, item);
         }
     }
 
@@ -405,6 +571,20 @@ public class BotEntity extends PathfinderMob implements GeoEntity {
         tag.putString("AIState", aiState.name());
         tag.putString("Role", role.name());
         tag.putLong("SpawnTime", spawnTime);
+
+        // Save player UUID for Mojang skin (from synced data)
+        UUID playerUUID = getPlayerUUID();
+        if (playerUUID != null) {
+            tag.putUUID("PlayerUUID", playerUUID);
+        }
+
+        // Save building toggle (from synced data)
+        tag.putBoolean("CanPlaceBlocks", canPlaceBlocks());
+
+        // Save behavior config
+        if (behaviorConfig != null) {
+            tag.put("BehaviorConfig", behaviorConfig.saveToNBT());
+        }
     }
 
     /**
@@ -442,6 +622,67 @@ public class BotEntity extends PathfinderMob implements GeoEntity {
         }
 
         spawnTime = tag.getLong("SpawnTime");
+
+        // Load player UUID for Mojang skin (into synced data)
+        if (tag.hasUUID("PlayerUUID")) {
+            setPlayerUUID(tag.getUUID("PlayerUUID"));
+        }
+
+        // Load building toggle (into synced data)
+        if (tag.contains("CanPlaceBlocks")) {
+            setCanPlaceBlocks(tag.getBoolean("CanPlaceBlocks"));
+        }
+
+        // Load behavior config
+        if (tag.contains("BehaviorConfig")) {
+            if (behaviorConfig == null) {
+                behaviorConfig = new BotBehaviorConfig();
+            }
+            behaviorConfig.loadFromNBT(tag.getCompound("BehaviorConfig"));
+        }
+    }
+
+    /**
+     * Check if the bot's name should always be visible
+     * @return true to always show name tag
+     */
+    @Override
+    public boolean hasCustomName() {
+        return true;
+    }
+
+    /**
+     * Get the custom name for the bot
+     * @return The bot's display name
+     */
+    @Override
+    public net.minecraft.network.chat.Component getCustomName() {
+        return net.minecraft.network.chat.Component.literal(getBotName());
+    }
+
+    /**
+     * Always show the name tag above the bot
+     * @return true to always render name
+     */
+    @Override
+    public boolean isCustomNameVisible() {
+        return true;
+    }
+
+    /**
+     * Prevent bots from despawning when player is far away
+     */
+    @Override
+    public boolean removeWhenFarAway(double distanceToClosestPlayer) {
+        return false; // NEVER despawn bots
+    }
+
+    /**
+     * Override to prevent bots from being affected by difficulty
+     */
+    @Override
+    public boolean isPersistenceRequired() {
+        return true; // Bots ALWAYS persist
     }
 
     /**
@@ -476,39 +717,25 @@ public class BotEntity extends PathfinderMob implements GeoEntity {
         }
     }
 
-    /**
-     * GeckoLib animation predicate
-     * Determines which animation to play based on bot state
-     *
-     * @param state The animation state
-     * @return PlayState indicating whether to continue animation
-     */
+    // GeckoLib animation methods - will be restored when GeckoLib is available
+    /*
     private PlayState predicate(AnimationState<BotEntity> state) {
-        // Check if bot is swimming
         if (this.isInWater()) {
             state.getController().setAnimation(SWIM_ANIM);
             return PlayState.CONTINUE;
         }
-
-        // Check if bot is climbing
         if (this.aiState == BotAIState.CLIMBING || this.onClimbable()) {
             state.getController().setAnimation(CLIMB_ANIM);
             return PlayState.CONTINUE;
         }
-
-        // Check if bot is attacking
         if (this.aiState == BotAIState.ATTACKING || this.isAggressive()) {
             state.getController().setAnimation(ATTACK_ANIM);
             return PlayState.CONTINUE;
         }
-
-        // Check if bot is sneaking
         if (this.isShiftKeyDown()) {
             state.getController().setAnimation(SNEAK_ANIM);
             return PlayState.CONTINUE;
         }
-
-        // Check if bot is moving
         if (this.getDeltaMovement().horizontalDistanceSqr() > 1.0E-6D) {
             if (this.isSprinting()) {
                 state.getController().setAnimation(RUN_ANIM);
@@ -517,32 +744,42 @@ public class BotEntity extends PathfinderMob implements GeoEntity {
             }
             return PlayState.CONTINUE;
         }
-
-        // Default to idle animation
         state.getController().setAnimation(IDLE_ANIM);
         return PlayState.CONTINUE;
     }
 
-    /**
-     * Register animation controllers
-     * Required by GeoEntity interface
-     *
-     * @param controllers The controller registrar
-     */
     @Override
     public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
         controllers.add(new AnimationController<>(this, "controller", 0, this::predicate));
     }
 
-    /**
-     * Get the animation cache
-     * Required by GeoEntity interface
-     *
-     * @return The animation cache instance
-     */
     @Override
     public AnimatableInstanceCache getAnimatableInstanceCache() {
         return this.cache;
+    }
+    */
+
+    /**
+     * Called when the bot is removed from the world
+     * Handles all cleanup: UUID release and BotManager cleanup
+     * Note: die() is called BEFORE remove(), so we only need cleanup here
+     */
+    @Override
+    public void remove(RemovalReason reason) {
+        if (!this.level().isClientSide) {
+            // Release the player UUID for reuse
+            UUID playerUUID = getPlayerUUID();
+            if (playerUUID != null) {
+                MojangSkinFetcher.releasePlayerUUID(playerUUID);
+            }
+
+            // Cleanup from BotManager (works for both death and manual removal)
+            com.aibrigade.main.AIBrigadeMod.getBotManager().onBotRemoved(this);
+
+            System.out.println("[BotEntity] Bot " + this.getBotName() + " removed and cleaned up");
+        }
+
+        super.remove(reason);
     }
 
     /**

@@ -26,9 +26,9 @@ public class ClientEventHandler {
     public static void onRegisterRenderers(EntityRenderersEvent.RegisterRenderers event) {
         AIBrigadeMod.LOGGER.info("Registering entity renderers");
 
-        // Register bot entity renderer with GeckoLib support
-        event.registerEntityRenderer(ModEntities.BOT.get(), BotRenderer::new);
+        // Register bot entity renderer with Mojang skin support
+        event.registerEntityRenderer(ModEntities.BOT.get(), BotPlayerSkinRenderer::new);
 
-        AIBrigadeMod.LOGGER.info("Bot renderer registered successfully");
+        AIBrigadeMod.LOGGER.info("Bot renderer registered successfully (with Mojang skin support)");
     }
 }

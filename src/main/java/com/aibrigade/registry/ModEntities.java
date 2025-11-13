@@ -27,10 +27,10 @@ public class ModEntities {
     public static final RegistryObject<EntityType<BotEntity>> BOT =
             ENTITY_TYPES.register("bot",
                     () -> EntityType.Builder.of(BotEntity::new, MobCategory.CREATURE)
-                            .sized(0.6F, 1.8F) // Player-sized hitbox
-                            .clientTrackingRange(10) // Distance in chunks for client tracking
-                            .updateInterval(3) // Update interval in ticks
-                            .build("bot"));
+                            .sized(0.6F, 1.8F)
+                            .clientTrackingRange(10)
+                            .updateInterval(3)
+                            .build(AIBrigadeMod.MOD_ID + ":bot"));
 
     /**
      * Register all entities to the mod event bus

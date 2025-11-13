@@ -423,7 +423,8 @@ public class BotGoals {
             }
 
             // Return to home if too far
-            if (DistanceHelper.isOutsideDistance(bot, home, guardRadius)) {
+            double distanceToHome = bot.distanceToSqr(home.getX(), home.getY(), home.getZ());
+            if (distanceToHome > guardRadius * guardRadius) {
                 BotMovementHelper.moveToBlockPos(bot, home, BotAIConstants.SPEED_WALK);
             } else {
                 BotMovementHelper.stopMovement(bot);

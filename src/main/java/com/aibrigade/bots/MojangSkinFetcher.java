@@ -294,6 +294,32 @@ public class MojangSkinFetcher {
     }
 
     /**
+     * Récupère l'UUID d'un joueur depuis le cache name-to-UUID
+     */
+    public static UUID getFamousPlayerUUID(String name) {
+        return NAME_TO_UUID_CACHE.get(name.toLowerCase());
+    }
+
+    /**
+     * Vérifie si un UUID correspond à un joueur en cache
+     */
+    public static boolean isFamousPlayer(UUID uuid) {
+        return NAME_TO_UUID_CACHE.containsValue(uuid);
+    }
+
+    /**
+     * Récupère le nom d'un joueur depuis son UUID (cherche dans le cache)
+     */
+    public static String getFamousPlayerName(UUID uuid) {
+        for (Map.Entry<String, UUID> entry : NAME_TO_UUID_CACHE.entrySet()) {
+            if (entry.getValue().equals(uuid)) {
+                return entry.getKey();
+            }
+        }
+        return null;
+    }
+
+    /**
      * Obtient un profil depuis le cache (sans requête API)
      * Utilisé par le renderer côté client
      *

@@ -42,7 +42,7 @@ public class BotJumpHelper {
         }
 
         // Only jump if climbing is enabled in config
-        if (!config.canClimb()) {
+        if (!config.canClimbBlocks()) {
             return false;
         }
 
@@ -87,7 +87,7 @@ public class BotJumpHelper {
      * Try to jump if target is higher and within jumpable range
      */
     public static void tryJumpToTarget(BotEntity bot, LivingEntity target, BotBehaviorConfig config) {
-        if (shouldJumpToReachTarget(bot, target) && config != null && config.canClimb()) {
+        if (shouldJumpToReachTarget(bot, target) && config != null && config.canClimbBlocks()) {
             jump(bot);
         }
     }

@@ -1,7 +1,6 @@
 package com.aibrigade.bots;
 
-import com.aibrigade.ai.RealisticFollowLeaderGoal;
-import com.aibrigade.ai.ActiveGazeBehavior;
+import com.aibrigade.ai.FollowLeaderGoal;
 import com.aibrigade.ai.TeamAwareAttackGoal;
 import com.aibrigade.ai.PlaceBlockToReachTargetGoal;
 import net.minecraft.world.entity.PathfinderMob;
@@ -79,10 +78,6 @@ public class BotEntity extends PathfinderMob {
         SynchedEntityData.defineId(BotEntity.class, EntityDataSerializers.BOOLEAN);
     private static final EntityDataAccessor<Boolean> IS_FOLLOWING_LEADER =
         SynchedEntityData.defineId(BotEntity.class, EntityDataSerializers.BOOLEAN);
-    private static final EntityDataAccessor<java.util.Optional<UUID>> PLAYER_UUID =
-        SynchedEntityData.defineId(BotEntity.class, EntityDataSerializers.OPTIONAL_UUID);
-    private static final EntityDataAccessor<Boolean> CAN_PLACE_BLOCKS =
-        SynchedEntityData.defineId(BotEntity.class, EntityDataSerializers.BOOLEAN);
 
     // Bot properties
     private UUID leaderId; // UUID of the leader (player or bot)
@@ -119,15 +114,6 @@ public class BotEntity extends PathfinderMob {
         for (int i = 0; i < armorSlots.length; i++) {
             armorSlots[i] = ItemStack.EMPTY;
         }
-
-        // Apply random Mojang skin and equipment
-        if (!level.isClientSide) {
-            // Appliquer un skin Mojang aléatoire avec vrai UUID
-            MojangSkinFetcher.applyRandomFamousSkin(this);
-
-            // Équiper un item complètement aléatoire (pioche, épée, blocs, nourriture, rien)
-            RandomEquipment.equipRandomItem(this);
-        }
     }
 
     /**
@@ -145,8 +131,6 @@ public class BotEntity extends PathfinderMob {
         this.entityData.define(FOLLOW_RADIUS, 10.0f);
         this.entityData.define(IS_HOSTILE, false);
         this.entityData.define(IS_FOLLOWING_LEADER, false);
-        this.entityData.define(PLAYER_UUID, java.util.Optional.empty());
-        this.entityData.define(CAN_PLACE_BLOCKS, true);
     }
 
     /**
@@ -172,30 +156,14 @@ public class BotEntity extends PathfinderMob {
     @Override
     protected void registerGoals() {
         super.registerGoals();
-
-        // Priorité 0: Float in water
+        // Add basic AI goals so bots can actually move and behave
         this.goalSelector.addGoal(0, new net.minecraft.world.entity.ai.goal.FloatGoal(this));
-
-        // Priorité 1: Active gaze behavior (regard actif 2/6 bots)
-        this.goalSelector.addGoal(1, new ActiveGazeBehavior(this));
-
-        // Priorité 2: Realistic follow leader (avec probabilités et variations)
-        this.goalSelector.addGoal(2, new RealisticFollowLeaderGoal(this, 1.1D, 3.0F, 10.0F));
-
-        // Priorité 3: Place blocks to reach target (avec toggle canPlaceBlocks)
-        this.goalSelector.addGoal(3, new PlaceBlockToReachTargetGoal(this));
-
-        // Priorité 4: Melee attack
-        this.goalSelector.addGoal(4, new net.minecraft.world.entity.ai.goal.MeleeAttackGoal(this, 1.2D, false));
-
-        // Priorité 5: Wander when idle
-        this.goalSelector.addGoal(5, new net.minecraft.world.entity.ai.goal.WaterAvoidingRandomStrollGoal(this, 0.8D));
-
-        // Priorité 6: Look at player (secondaire car ActiveGazeBehavior gère déjà)
-        this.goalSelector.addGoal(6, new net.minecraft.world.entity.ai.goal.LookAtPlayerGoal(this, Player.class, 8.0F));
-
-        // Priorité 7: Random look around
-        this.goalSelector.addGoal(7, new net.minecraft.world.entity.ai.goal.RandomLookAroundGoal(this));
+        this.goalSelector.addGoal(1, new FollowLeaderGoal(this, 1.1D, 3.0F, 10.0F)); // Follow leader with realistic behavior
+        this.goalSelector.addGoal(2, new PlaceBlockToReachTargetGoal(this)); // Place blocks to reach target
+        this.goalSelector.addGoal(3, new net.minecraft.world.entity.ai.goal.MeleeAttackGoal(this, 1.2D, false));
+        this.goalSelector.addGoal(4, new net.minecraft.world.entity.ai.goal.WaterAvoidingRandomStrollGoal(this, 0.8D)); // Wander when idle
+        this.goalSelector.addGoal(5, new net.minecraft.world.entity.ai.goal.LookAtPlayerGoal(this, Player.class, 8.0F));
+        this.goalSelector.addGoal(6, new net.minecraft.world.entity.ai.goal.RandomLookAroundGoal(this));
 
         // Add TEAM-AWARE attack target selectors (won't attack teammates)
         this.targetSelector.addGoal(1, new net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal(this));
@@ -434,40 +402,6 @@ public class BotEntity extends PathfinderMob {
     }
 
     /**
-     * Get the player UUID (for Mojang skin)
-     * @return The player UUID, or null if not set
-     */
-    public UUID getPlayerUUID() {
-        return this.entityData.get(PLAYER_UUID).orElse(null);
-    }
-
-    /**
-     * Set the player UUID (for Mojang skin)
-     * Synchronized across client and server
-     * @param uuid The player UUID
-     */
-    public void setPlayerUUID(UUID uuid) {
-        this.entityData.set(PLAYER_UUID, java.util.Optional.ofNullable(uuid));
-    }
-
-    /**
-     * Check if the bot can place blocks
-     * @return true if can place blocks
-     */
-    public boolean canPlaceBlocks() {
-        return this.entityData.get(CAN_PLACE_BLOCKS);
-    }
-
-    /**
-     * Set whether the bot can place blocks
-     * Synchronized across client and server
-     * @param canPlace true to allow block placement
-     */
-    public void setCanPlaceBlocks(boolean canPlace) {
-        this.entityData.set(CAN_PLACE_BLOCKS, canPlace);
-    }
-
-    /**
      * Get the bot's behavior configuration
      * @return The behavior config
      */
@@ -571,15 +505,6 @@ public class BotEntity extends PathfinderMob {
         tag.putString("Role", role.name());
         tag.putLong("SpawnTime", spawnTime);
 
-        // Save player UUID for Mojang skin (from synced data)
-        UUID playerUUID = getPlayerUUID();
-        if (playerUUID != null) {
-            tag.putUUID("PlayerUUID", playerUUID);
-        }
-
-        // Save building toggle (from synced data)
-        tag.putBoolean("CanPlaceBlocks", canPlaceBlocks());
-
         // Save behavior config
         if (behaviorConfig != null) {
             tag.put("BehaviorConfig", behaviorConfig.saveToNBT());
@@ -613,34 +538,14 @@ public class BotEntity extends PathfinderMob {
         }
 
         if (tag.contains("AIState")) {
-            try {
-                aiState = BotAIState.valueOf(tag.getString("AIState"));
-            } catch (IllegalArgumentException e) {
-                aiState = BotAIState.IDLE; // Default fallback for corrupted data
-                com.aibrigade.main.AIBrigadeMod.LOGGER.warn("Invalid AIState in saved data, using IDLE: {}", e.getMessage());
-            }
+            aiState = BotAIState.valueOf(tag.getString("AIState"));
         }
 
         if (tag.contains("Role")) {
-            try {
-                role = BotRole.valueOf(tag.getString("Role"));
-            } catch (IllegalArgumentException e) {
-                role = BotRole.SOLDIER; // Default fallback for corrupted data
-                com.aibrigade.main.AIBrigadeMod.LOGGER.warn("Invalid Role in saved data, using SOLDIER: {}", e.getMessage());
-            }
+            role = BotRole.valueOf(tag.getString("Role"));
         }
 
         spawnTime = tag.getLong("SpawnTime");
-
-        // Load player UUID for Mojang skin (into synced data)
-        if (tag.hasUUID("PlayerUUID")) {
-            setPlayerUUID(tag.getUUID("PlayerUUID"));
-        }
-
-        // Load building toggle (into synced data)
-        if (tag.contains("CanPlaceBlocks")) {
-            setCanPlaceBlocks(tag.getBoolean("CanPlaceBlocks"));
-        }
 
         // Load behavior config
         if (tag.contains("BehaviorConfig")) {
@@ -767,29 +672,6 @@ public class BotEntity extends PathfinderMob {
         return this.cache;
     }
     */
-
-    /**
-     * Called when the bot is removed from the world
-     * Handles all cleanup: UUID release and BotManager cleanup
-     * Note: die() is called BEFORE remove(), so we only need cleanup here
-     */
-    @Override
-    public void remove(RemovalReason reason) {
-        if (!this.level().isClientSide) {
-            // Release the player UUID for reuse
-            UUID playerUUID = getPlayerUUID();
-            if (playerUUID != null) {
-                MojangSkinFetcher.releasePlayerUUID(playerUUID);
-            }
-
-            // Cleanup from BotManager (works for both death and manual removal)
-            com.aibrigade.main.AIBrigadeMod.getBotManager().onBotRemoved(this);
-
-            com.aibrigade.main.AIBrigadeMod.LOGGER.info("Bot {} removed and cleaned up", this.getBotName());
-        }
-
-        super.remove(reason);
-    }
 
     /**
      * AI state enumeration

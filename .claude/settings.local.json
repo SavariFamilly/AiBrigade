@@ -13,7 +13,10 @@
       "Bash(./gradlew clean build:*)",
       "Bash(xargs:*)",
       "Bash(cat:*)",
-      "WebFetch(domain:www.curseforge.com)"
+      "WebFetch(domain:www.curseforge.com)",
+      "Bash(powershell:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nFix: Resolve compilation errors after user modifications\n\nFixed 7 compilation errors:\n- BotGoals.java: Fix DistanceHelper call with BlockPos (use direct distance calculation)\n- MojangSkinFetcher.java: Add missing methods getFamousPlayerUUID, isFamousPlayer, getFamousPlayerName\n- BotJumpHelper.java: Fix method name from canClimb() to canClimbBlocks()\n\nAll errors resolved, build successful.\n\n🤖 Generated with Claude Code\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")"
     ],
     "deny": [],
     "ask": []

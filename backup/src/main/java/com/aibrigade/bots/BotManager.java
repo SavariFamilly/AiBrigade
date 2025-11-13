@@ -79,17 +79,15 @@ public class BotManager {
         }
 
         // Create bot entity using registered entity type
-        // Le constructeur de BotEntity applique automatiquement:
-        // - MojangSkinFetcher.applyRandomFamousSkin(this)
-        // - RandomEquipment.equipRandomItem(this)
         BotEntity bot = new BotEntity(ModEntities.BOT.get(), level);
 
         AIBrigadeMod.LOGGER.info("Spawning bot at {} in group {} with behavior {}",
             pos, groupName, behavior);
 
-        // Configure bot (NE PAS écraser le nom et skin déjà appliqués dans le constructeur)
+        // Configure bot
         bot.setPos(pos.getX(), pos.getY(), pos.getZ());
-        // bot.setBotName() et bot.setBotSkin() sont déjà définis par le constructeur via MojangSkinFetcher
+        bot.setBotName(SkinAndNameGenerator.generateName(SkinAndNameGenerator.NamePreset.REALISTIC));
+        bot.setBotSkin(SkinAndNameGenerator.getRandomSkin());
         bot.setBehaviorType(behavior);
         bot.setFollowRadius(radius);
         bot.setStatic(isStatic);
@@ -102,8 +100,8 @@ public class BotManager {
             bot.setLeaderId(leaderId);
         }
 
-        // L'équipement est déjà appliqué dans le constructeur via RandomEquipment.equipRandomItem()
-        // Ne pas appeler giveStartingEquipment() qui écrase l'équipement
+        // Give starting equipment
+        giveStartingEquipment(bot);
 
         // Add to world
         level.addFreshEntity(bot);
@@ -163,7 +161,7 @@ public class BotManager {
     }
 
     /**
-     * Remove a bot by UUID (command-triggered removal)
+     * Remove a bot by UUID
      *
      * @param botId The bot's UUID
      * @return true if removed successfully
@@ -171,51 +169,20 @@ public class BotManager {
     public boolean removeBot(UUID botId) {
         BotEntity bot = activeBots.get(botId);
         if (bot != null) {
-            // Remove from world (this will trigger onBotRemoved via BotEntity.remove())
+            // Remove from group
+            String groupName = bot.getBotGroup();
+            removeBotFromGroup(groupName, botId);
+
+            // Remove from world
             bot.remove(net.minecraft.world.entity.Entity.RemovalReason.DISCARDED);
+
+            // Remove from active bots
+            activeBots.remove(botId);
+
+            AIBrigadeMod.LOGGER.info("Bot {} removed", bot.getBotName());
             return true;
         }
         return false;
-    }
-
-    /**
-     * Internal cleanup method - called when a bot dies or is removed
-     * Centralizes all cleanup logic to avoid duplication
-     *
-     * @param bot The bot to cleanup
-     * @param reason Reason for cleanup (for logging)
-     */
-    private void cleanupBot(BotEntity bot, String reason) {
-        if (bot == null) return;
-
-        UUID botId = bot.getUUID();
-
-        // Check if already cleaned (avoid double cleanup)
-        if (!activeBots.containsKey(botId)) {
-            return;
-        }
-
-        String groupName = bot.getBotGroup();
-        String botName = bot.getBotName();
-
-        // Remove from group
-        removeBotFromGroup(groupName, botId);
-
-        // Remove from active bots
-        activeBots.remove(botId);
-
-        AIBrigadeMod.LOGGER.info("Bot {} {} (remaining: {}/{})",
-            botName, reason, activeBots.size(), MAX_BOTS);
-    }
-
-    /**
-     * Called when a bot is removed from the world
-     * This is called automatically by BotEntity.remove()
-     *
-     * @param bot The bot being removed
-     */
-    public void onBotRemoved(BotEntity bot) {
-        cleanupBot(bot, "removed from world");
     }
 
     /**
@@ -262,8 +229,8 @@ public class BotManager {
 
         group.setLeaderName(leaderName);
 
-        // Update all bots in group - copy set to avoid concurrent modification
-        for (UUID botId : new HashSet<>(group.getBotIds())) {
+        // Update all bots in group
+        for (UUID botId : group.getBotIds()) {
             BotEntity bot = activeBots.get(botId);
             if (bot != null) {
                 // TODO: Find leader UUID and assign
@@ -369,8 +336,8 @@ public class BotManager {
             }
         }
 
-        // Set hostile state for all bots in the group - copy set to avoid concurrent modification
-        for (UUID botId : new HashSet<>(group.getBotIds())) {
+        // Set hostile state for all bots in the group
+        for (UUID botId : group.getBotIds()) {
             BotEntity bot = activeBots.get(botId);
             if (bot != null) {
                 bot.setHostile(hasHostileRelationships);
@@ -410,77 +377,46 @@ public class BotManager {
     }
 
     /**
-     * Enable/disable follow leader mode for a group with specified radius
-     * Selon le cahier des charges:
-     * - 5/6 des bots suivent dans le radius défini
-     * - 1/6 des bots suivent activement le leader
-     * Les probabilités sont assignées automatiquement lors de la création du Goal
-     *
-     * @param groupName Group name
-     * @param enabled true to enable following, false to disable
-     * @param radius Follow radius for the group
-     * @return true if successful, false if group not found
-     */
-    public boolean setFollowLeader(String groupName, boolean enabled, float radius) {
-        // Check if target is a group
-        if (botGroups.containsKey(groupName)) {
-            BotGroup group = botGroups.get(groupName);
-            Set<UUID> groupBots = group.getBotIds();
-            if (groupBots.isEmpty()) {
-                return false;
-            }
-
-            // Update group radius
-            group.setFollowRadius(radius);
-
-            // Set follow leader for all bots in group - copy set to avoid concurrent modification
-            int count = 0;
-            int activeFollowers = 0;
-            int radiusFollowers = 0;
-
-            for (UUID botUUID : new HashSet<>(groupBots)) {
-                BotEntity bot = activeBots.get(botUUID);
-                if (bot != null) {
-                    bot.setFollowingLeader(enabled);
-                    bot.setFollowRadius(radius);
-                    count++;
-
-                    // Les probabilités sont déjà assignées dans RealisticFollowLeaderGoal
-                    // On compte juste pour l'info
-                    if (enabled) {
-                        // Note: l'information exacte sur le type nécessiterait d'accéder au Goal
-                        // Pour l'instant on estime: 1/6 active, 5/6 radius-based
-                    }
-                }
-            }
-
-            // Estimation des ratios pour le log
-            activeFollowers = Math.round(count / 6.0f);
-            radiusFollowers = count - activeFollowers;
-
-            AIBrigadeMod.LOGGER.info("Set follow leader {} for {} bots in group '{}' with radius {} " +
-                "(estimated: ~{} active followers, ~{} radius-based followers)",
-                enabled ? "enabled" : "disabled", count, groupName, radius,
-                activeFollowers, radiusFollowers);
-            return count > 0;
-        }
-
-        AIBrigadeMod.LOGGER.warn("Group '{}' not found", groupName);
-        return false;
-    }
-
-    /**
-     * Legacy method for backward compatibility
-     * Enable/disable follow leader mode for a bot or group without radius parameter
+     * Enable/disable follow leader mode for a bot or group
      *
      * @param targetName Bot name or group name
      * @param enabled true to enable following, false to disable
      * @return true if successful, false if bot/group not found
      */
-    @Deprecated
     public boolean setFollowLeader(String targetName, boolean enabled) {
-        // Use default radius of 10.0f
-        return setFollowLeader(targetName, enabled, 10.0f);
+        // Check if target is a group
+        if (botGroups.containsKey(targetName)) {
+            BotGroup group = botGroups.get(targetName);
+            Set<UUID> groupBots = group.getBotIds();
+            if (groupBots.isEmpty()) {
+                return false;
+            }
+
+            // Set follow leader for all bots in group
+            int count = 0;
+            for (UUID botUUID : groupBots) {
+                BotEntity bot = activeBots.get(botUUID);
+                if (bot != null) {
+                    bot.setFollowingLeader(enabled);
+                    count++;
+                }
+            }
+
+            AIBrigadeMod.LOGGER.info("Set follow leader {} for {} bots in group '{}'",
+                enabled ? "enabled" : "disabled", count, targetName);
+            return count > 0;
+        } else {
+            // Find individual bot by name
+            BotEntity bot = findBotByName(targetName);
+            if (bot != null) {
+                bot.setFollowingLeader(enabled);
+                AIBrigadeMod.LOGGER.info("Set follow leader {} for bot '{}'",
+                    enabled ? "enabled" : "disabled", targetName);
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -526,8 +462,7 @@ public class BotManager {
         }
 
         int equipped = 0;
-        // Copy set to avoid concurrent modification
-        for (UUID botId : new HashSet<>(group.getBotIds())) {
+        for (UUID botId : group.getBotIds()) {
             BotEntity bot = activeBots.get(botId);
             if (bot != null) {
                 giveArmorToBot(bot, isFull, materials);
@@ -701,7 +636,7 @@ public class BotManager {
     /**
      * Find bot by name
      */
-    public BotEntity findBotByName(String name) {
+    private BotEntity findBotByName(String name) {
         for (BotEntity bot : activeBots.values()) {
             if (bot.getBotName().equalsIgnoreCase(name)) {
                 return bot;
@@ -827,32 +762,6 @@ public class BotManager {
         return new File(modDataDir, "bots.json");
     }
 
-    /**
-     * Clean up dead or invalid bots from the manager
-     * Called periodically (every 5 seconds) to ensure dead bots don't block new spawns
-     * This is a safety net in case onBotRemoved() wasn't called
-     */
-    public void cleanupDeadBots() {
-        List<BotEntity> toRemove = new ArrayList<>();
-
-        for (BotEntity bot : activeBots.values()) {
-            // Remove if bot is dead, removed, or invalid
-            if (bot == null || !bot.isAlive() || bot.isRemoved()) {
-                toRemove.add(bot);
-            }
-        }
-
-        if (!toRemove.isEmpty()) {
-            for (BotEntity bot : toRemove) {
-                // Use centralized cleanup method
-                cleanupBot(bot, "found dead during periodic cleanup");
-            }
-
-            AIBrigadeMod.LOGGER.info("Periodic cleanup: removed {} dead/invalid bots (remaining: {}/{})",
-                toRemove.size(), activeBots.size(), MAX_BOTS);
-        }
-    }
-
     // Getters
 
     public Map<UUID, BotEntity> getActiveBots() {
@@ -861,20 +770,6 @@ public class BotManager {
 
     public Map<String, BotGroup> getBotGroups() {
         return Collections.unmodifiableMap(botGroups);
-    }
-
-    /**
-     * Get current bot count (for checking against limit)
-     */
-    public int getBotCount() {
-        return activeBots.size();
-    }
-
-    /**
-     * Get maximum allowed bots
-     */
-    public int getMaxBots() {
-        return MAX_BOTS;
     }
 
     /**

@@ -1,0 +1,117 @@
+{
+  "behaviors": {
+    "follow": {
+      "description": "Bot follows assigned leader within radius",
+      "defaultRadius": 10.0,
+      "priority": 5,
+      "allowedActions": [
+        "move",
+        "jump",
+        "climb",
+        "attack_if_leader_attacked"
+      ],
+      "updateInterval": 4
+    },
+    "patrol": {
+      "description": "Bot patrols around home position",
+      "defaultRadius": 20.0,
+      "priority": 3,
+      "allowedActions": [
+        "move",
+        "jump",
+        "attack_if_threatened",
+        "alert_group"
+      ],
+      "updateInterval": 20,
+      "waypointCount": 4,
+      "waitTimeAtWaypoint": 100
+    },
+    "raid": {
+      "description": "Aggressive behavior - attack and destroy",
+      "defaultRadius": 15.0,
+      "priority": 8,
+      "allowedActions": [
+        "move",
+        "jump",
+        "climb",
+        "attack",
+        "break_blocks",
+        "collect_loot"
+      ],
+      "updateInterval": 2,
+      "targetTypes": [
+        "hostile_mobs",
+        "structures",
+        "other_groups"
+      ]
+    },
+    "guard": {
+      "description": "Defensive behavior - protect area",
+      "defaultRadius": 10.0,
+      "priority": 6,
+      "allowedActions": [
+        "move",
+        "attack_intruders",
+        "alert_group",
+        "call_for_help"
+      ],
+      "updateInterval": 10,
+      "alertRadius": 20.0,
+      "returnToPostAfterCombat": true
+    },
+    "idle": {
+      "description": "Default idle behavior",
+      "defaultRadius": 5.0,
+      "priority": 1,
+      "allowedActions": [
+        "look_around",
+        "small_movements"
+      ],
+      "updateInterval": 40
+    }
+  },
+  "globalSettings": {
+    "maxGroupSize": 300,
+    "maxGroups": 50,
+    "defaultSpacing": 2.0,
+    "collisionAvoidance": true,
+    "obstacleDetection": true,
+    "allowBlockBreaking": false,
+    "allowBlockPlacing": false,
+    "respawnOnDeath": false
+  },
+  "aiSettings": {
+    "threadPoolSize": 4,
+    "updateInterval": 4,
+    "pathfindingTimeout": 200,
+    "maxPathfindingDistance": 128,
+    "useBaritoneIfAvailable": true,
+    "useSmartBrainIfAvailable": true
+  },
+  "animationSettings": {
+    "enableAnimations": true,
+    "animationBlendTime": 5,
+    "syncWithAIState": true,
+    "animationLibrary": "auto"
+  },
+  "combatSettings": {
+    "autoRetaliate": true,
+    "groupRetaliationRadius": 20.0,
+    "fleeHealthThreshold": 0.3,
+    "attackCooldown": 20,
+    "attackDamage": 2.0,
+    "attackRange": 3.0
+  },
+  "formationSettings": {
+    "maintainFormation": true,
+    "formationSpacing": 2.5,
+    "reformAfterCombat": true,
+    "leaderFormationOffset": 5.0,
+    "availableFormations": [
+      "line",
+      "circle",
+      "square",
+      "wedge"
+    ]
+  }
+}

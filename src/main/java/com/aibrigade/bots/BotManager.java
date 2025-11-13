@@ -262,8 +262,8 @@ public class BotManager {
 
         group.setLeaderName(leaderName);
 
-        // Update all bots in group
-        for (UUID botId : group.getBotIds()) {
+        // Update all bots in group - copy set to avoid concurrent modification
+        for (UUID botId : new HashSet<>(group.getBotIds())) {
             BotEntity bot = activeBots.get(botId);
             if (bot != null) {
                 // TODO: Find leader UUID and assign
@@ -369,8 +369,8 @@ public class BotManager {
             }
         }
 
-        // Set hostile state for all bots in the group
-        for (UUID botId : group.getBotIds()) {
+        // Set hostile state for all bots in the group - copy set to avoid concurrent modification
+        for (UUID botId : new HashSet<>(group.getBotIds())) {
             BotEntity bot = activeBots.get(botId);
             if (bot != null) {
                 bot.setHostile(hasHostileRelationships);
@@ -433,12 +433,12 @@ public class BotManager {
             // Update group radius
             group.setFollowRadius(radius);
 
-            // Set follow leader for all bots in group
+            // Set follow leader for all bots in group - copy set to avoid concurrent modification
             int count = 0;
             int activeFollowers = 0;
             int radiusFollowers = 0;
 
-            for (UUID botUUID : groupBots) {
+            for (UUID botUUID : new HashSet<>(groupBots)) {
                 BotEntity bot = activeBots.get(botUUID);
                 if (bot != null) {
                     bot.setFollowingLeader(enabled);
@@ -526,7 +526,8 @@ public class BotManager {
         }
 
         int equipped = 0;
-        for (UUID botId : group.getBotIds()) {
+        // Copy set to avoid concurrent modification
+        for (UUID botId : new HashSet<>(group.getBotIds())) {
             BotEntity bot = activeBots.get(botId);
             if (bot != null) {
                 giveArmorToBot(bot, isFull, materials);

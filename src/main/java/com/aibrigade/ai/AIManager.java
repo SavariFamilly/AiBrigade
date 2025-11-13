@@ -13,25 +13,31 @@ import java.util.*;
 /**
  * AIManager - Global AI management system
  *
- * Manages all AI behaviors for bots including:
- * - Goal execution and updates
- * - Multithreaded AI processing
- * - Behavior state transitions
- * - Group coordination
- * - Hostility management
+ * Manages AI-related functionality for bots including:
+ * - Group behavior coordination
+ * - Cleanup of dead/invalid bots
+ * - Thread pool for future async AI operations
  *
- * Uses a thread pool for efficient parallel AI processing
+ * Note: Individual bot AI behaviors are handled by Minecraft's Goal system
+ * through Goal classes registered in BotEntity.registerGoals():
+ * - RealisticFollowLeaderGoal: Handles follow behavior with realistic movement
+ * - ActiveGazeBehavior: Manages bot gaze and looking behavior
+ * - PlaceBlockToReachTargetGoal: Enables bots to place blocks when climbing
+ * - TeamAwareAttackGoal: Handles combat targeting without friendly fire
+ * - Standard Minecraft Goals: FloatGoal, MeleeAttackGoal, WaterAvoidingRandomStrollGoal, etc.
+ *
+ * This manager focuses on high-level group coordination and resource management
+ * rather than individual bot AI logic.
  */
 public class AIManager {
 
-    // Thread pool for AI processing
+    // Thread pool for AI processing (available for future async operations)
     private final ExecutorService aiThreadPool;
     private final int threadPoolSize;
 
-    // AI tick counter (for performance optimization)
-    private int tickCounter = 0;
-    private static final int AI_UPDATE_INTERVAL = 4; // Update AI every 4 ticks
+    // Cleanup interval
     private static final int CLEANUP_INTERVAL = 100; // Cleanup dead bots every 100 ticks (5 seconds)
+    private int tickCounter = 0;
 
     // Server reference
     private MinecraftServer server;
@@ -52,18 +58,20 @@ public class AIManager {
     }
 
     /**
-     * Start AI ticking system
+     * Start AI system
+     * Note: Individual bot AI is handled by their registered Goals.
+     * This primarily manages cleanup and group coordination.
      *
      * @param server The minecraft server
      */
     public void startAITicking(MinecraftServer server) {
         this.server = server;
         this.isRunning = true;
-        AIBrigadeMod.LOGGER.info("AI ticking started");
+        AIBrigadeMod.LOGGER.info("AI system started");
     }
 
     /**
-     * Stop AI ticking and cleanup
+     * Stop AI system and cleanup resources
      */
     public void stopAITicking() {
         this.isRunning = false;
@@ -80,16 +88,14 @@ public class AIManager {
             Thread.currentThread().interrupt();
         }
 
-        AIBrigadeMod.LOGGER.info("AI ticking stopped and cleanup complete");
+        AIBrigadeMod.LOGGER.info("AI system stopped and cleanup complete");
     }
 
     /**
      * Server tick event handler
-     * Updates AI for all active bots
+     * Performs periodic cleanup of dead/invalid bots
      *
      * @param event The server tick event
-     * Note: This method is not currently registered to an event bus.
-     * TODO: Register this class to the event bus in AIBrigadeMod or make this static
      */
     @SubscribeEvent
     public void onServerTick(TickEvent.ServerTickEvent event) {
@@ -98,11 +104,6 @@ public class AIManager {
         }
 
         tickCounter++;
-
-        // Only update AI every N ticks for performance
-        if (tickCounter % AI_UPDATE_INTERVAL == 0) {
-            updateAllBotAI();
-        }
 
         // Cleanup dead bots periodically (every 5 seconds)
         if (tickCounter % CLEANUP_INTERVAL == 0) {
@@ -122,333 +123,11 @@ public class AIManager {
     }
 
     /**
-     * Update AI for all active bots
-     * Distributes bot AI updates across thread pool
-     */
-    private void updateAllBotAI() {
-        BotManager botManager = AIBrigadeMod.getBotManager();
-        if (botManager == null) {
-            return;
-        }
-
-        Map<UUID, BotEntity> bots = botManager.getActiveBots();
-        if (bots.isEmpty()) {
-            return;
-        }
-
-        // Create update tasks for each bot
-        List<CompletableFuture<Void>> futures = new ArrayList<>();
-
-        for (BotEntity bot : bots.values()) {
-            CompletableFuture<Void> future = CompletableFuture.runAsync(
-                () -> updateBotAI(bot),
-                aiThreadPool
-            );
-            futures.add(future);
-        }
-
-        // Wait for all updates to complete (non-blocking for game thread)
-        // In production, you might want to handle this differently
-        // to avoid any potential blocking
-    }
-
-    /**
-     * Update AI for a single bot
-     *
-     * @param bot The bot entity
-     */
-    private void updateBotAI(BotEntity bot) {
-        if (bot == null || !bot.isAlive()) {
-            return;
-        }
-
-        try {
-            // Update bot's AI state based on current conditions
-            updateAIState(bot);
-
-            // Execute current goals/behaviors
-            executeBehavior(bot);
-
-            // Check for hostility triggers
-            checkHostilityTriggers(bot);
-
-        } catch (Exception e) {
-            AIBrigadeMod.LOGGER.error("Error updating AI for bot {}: {}",
-                bot.getBotName(), e.getMessage());
-        }
-    }
-
-    /**
-     * Update bot's AI state based on current conditions
-     *
-     * @param bot The bot entity
-     */
-    private void updateAIState(BotEntity bot) {
-        // Determine appropriate AI state based on:
-        // - Current behavior type
-        // - Leader position and distance
-        // - Nearby threats
-        // - Static/mobile setting
-        // - Group coordination needs
-
-        if (bot.isStatic()) {
-            // Static bots only guard or idle
-            if (hasNearbyThreats(bot)) {
-                bot.setAIState(BotEntity.BotAIState.ATTACKING);
-            } else {
-                bot.setAIState(BotEntity.BotAIState.GUARDING);
-            }
-            return;
-        }
-
-        // Mobile bot state logic
-        String behavior = bot.getBehaviorType();
-
-        switch (behavior.toLowerCase()) {
-            case "raid":
-                if (hasNearbyThreats(bot)) {
-                    bot.setAIState(BotEntity.BotAIState.ATTACKING);
-                } else if (shouldFollowLeader(bot)) {
-                    bot.setAIState(BotEntity.BotAIState.FOLLOWING);
-                } else {
-                    bot.setAIState(BotEntity.BotAIState.PATROLLING);
-                }
-                break;
-
-            case "patrol":
-                if (hasNearbyThreats(bot)) {
-                    bot.setAIState(BotEntity.BotAIState.ATTACKING);
-                } else {
-                    bot.setAIState(BotEntity.BotAIState.PATROLLING);
-                }
-                break;
-
-            case "guard":
-                if (hasNearbyThreats(bot)) {
-                    bot.setAIState(BotEntity.BotAIState.ATTACKING);
-                } else if (isAwayFromHome(bot)) {
-                    bot.setAIState(BotEntity.BotAIState.FOLLOWING); // Return to home
-                } else {
-                    bot.setAIState(BotEntity.BotAIState.GUARDING);
-                }
-                break;
-
-            case "follow":
-            default:
-                if (hasNearbyThreats(bot)) {
-                    bot.setAIState(BotEntity.BotAIState.ATTACKING);
-                } else if (shouldFollowLeader(bot)) {
-                    bot.setAIState(BotEntity.BotAIState.FOLLOWING);
-                } else {
-                    bot.setAIState(BotEntity.BotAIState.IDLE);
-                }
-                break;
-        }
-    }
-
-    /**
-     * Execute behavior based on bot's current AI state
-     *
-     * @param bot The bot entity
-     */
-    private void executeBehavior(BotEntity bot) {
-        BotEntity.BotAIState state = bot.getAIState();
-
-        switch (state) {
-            case FOLLOWING:
-                executeFollowBehavior(bot);
-                break;
-
-            case ATTACKING:
-                executeAttackBehavior(bot);
-                break;
-
-            case PATROLLING:
-                executePatrolBehavior(bot);
-                break;
-
-            case GUARDING:
-                executeGuardBehavior(bot);
-                break;
-
-            case DISPERSING:
-                executeDisperseBehavior(bot);
-                break;
-
-            case CLIMBING:
-                executeClimbBehavior(bot);
-                break;
-
-            case FLEEING:
-                executeFleeBehavior(bot);
-                break;
-
-            case IDLE:
-            default:
-                executeIdleBehavior(bot);
-                break;
-        }
-    }
-
-    /**
-     * Execute follow leader behavior
-     * Bot stays within follow radius of leader and mimics leader actions
-     */
-    private void executeFollowBehavior(BotEntity bot) {
-        // TODO: Implement follow logic
-        // - Get leader position
-        // - Calculate distance to leader
-        // - If too far, move towards leader
-        // - If leader is climbing/jumping, mimic action
-        // - Maintain slight dispersion to avoid clustering
-        // - Use pathfinding for obstacle avoidance
-    }
-
-    /**
-     * Execute attack behavior
-     * Bot engages nearby hostile entities
-     */
-    private void executeAttackBehavior(BotEntity bot) {
-        // TODO: Implement attack logic
-        // - Find nearest hostile entity
-        // - Move towards target
-        // - Execute attack when in range
-        // - Coordinate with group if applicable
-        // - Switch to flee if health too low
-    }
-
-    /**
-     * Execute patrol behavior
-     * Bot patrols around home position or designated area
-     */
-    private void executePatrolBehavior(BotEntity bot) {
-        // TODO: Implement patrol logic
-        // - Define patrol waypoints
-        // - Move between waypoints
-        // - Scan for threats
-        // - Return to patrol if distracted
-    }
-
-    /**
-     * Execute guard behavior
-     * Bot defends a specific position
-     */
-    private void executeGuardBehavior(BotEntity bot) {
-        // TODO: Implement guard logic
-        // - Stay near guard position
-        // - Face random directions (scanning)
-        // - Attack anything hostile that comes near
-        // - Alert other bots in group
-    }
-
-    /**
-     * Execute disperse behavior
-     * Bot spreads out to avoid clustering
-     */
-    private void executeDisperseBehavior(BotEntity bot) {
-        // TODO: Implement disperse logic
-        // - Find nearby bots
-        // - Calculate average position
-        // - Move away from center
-        // - Maintain minimum spacing
-    }
-
-    /**
-     * Execute climb behavior
-     * Bot climbs obstacles to follow leader or reach destination
-     */
-    private void executeClimbBehavior(BotEntity bot) {
-        // TODO: Implement climb logic
-        // - Detect obstacle height
-        // - Jump and place blocks if needed
-        // - Break blocks if necessary
-        // - Use ladder/vine climbing
-    }
-
-    /**
-     * Execute flee behavior
-     * Bot retreats from danger
-     */
-    private void executeFleeBehavior(BotEntity bot) {
-        // TODO: Implement flee logic
-        // - Identify threat direction
-        // - Move away from threat
-        // - Seek cover
-        // - Rejoin group when safe
-    }
-
-    /**
-     * Execute idle behavior
-     * Bot performs ambient actions
-     */
-    private void executeIdleBehavior(BotEntity bot) {
-        // TODO: Implement idle logic
-        // - Occasional look around
-        // - Small random movements
-        // - Play idle animations
-    }
-
-    /**
-     * Check for hostility triggers
-     * Determines if bot's group should become hostile to another
-     */
-    private void checkHostilityTriggers(BotEntity bot) {
-        // TODO: Implement hostility checking
-        // - Check if bot is being attacked
-        // - Check if leader is being attacked
-        // - Check if group member is being attacked
-        // - If trigger detected, make entire group hostile
-    }
-
-    /**
-     * Check if bot has nearby threats
-     *
-     * @param bot The bot entity
-     * @return true if threats nearby
-     */
-    private boolean hasNearbyThreats(BotEntity bot) {
-        // TODO: Implement threat detection
-        // - Scan for hostile mobs
-        // - Check for hostile bots from other groups
-        // - Consider player attacks
-        return false;
-    }
-
-    /**
-     * Check if bot should follow leader
-     *
-     * @param bot The bot entity
-     * @return true if should follow
-     */
-    private boolean shouldFollowLeader(BotEntity bot) {
-        // TODO: Implement leader distance check
-        // - Get leader position
-        // - Calculate distance
-        // - Return true if outside follow radius
-        return false;
-    }
-
-    /**
-     * Check if bot is away from home position
-     *
-     * @param bot The bot entity
-     * @return true if away from home
-     */
-    private boolean isAwayFromHome(BotEntity bot) {
-        // TODO: Implement home distance check
-        if (bot.getHomePosition() == null) {
-            return false;
-        }
-
-        double distance = bot.blockPosition().distSqr(bot.getHomePosition());
-        return distance > (bot.getFollowRadius() * bot.getFollowRadius());
-    }
-
-    /**
      * Apply behavior to all bots in a group
+     * This sets the behavior type which can be used by Goal classes to adjust their logic
      *
      * @param groupName The group name
-     * @param behavior The behavior type
+     * @param behavior The behavior type (follow, raid, patrol, guard, etc.)
      */
     public void applyGroupBehavior(String groupName, String behavior) {
         BotManager botManager = AIBrigadeMod.getBotManager();
@@ -475,10 +154,11 @@ public class AIManager {
     }
 
     /**
-     * Set radius for all bots in a group
+     * Set follow radius for all bots in a group
+     * This affects how far bots will stay from their leader
      *
      * @param groupName The group name
-     * @param radius The new radius
+     * @param radius The new radius in blocks
      */
     public void setGroupRadius(String groupName, float radius) {
         BotManager botManager = AIBrigadeMod.getBotManager();
@@ -505,7 +185,8 @@ public class AIManager {
     }
 
     /**
-     * Toggle static state for group or bot
+     * Toggle static state for group or individual bot
+     * Static bots will not move (AI disabled)
      *
      * @param targetName Group or bot name
      */
@@ -543,5 +224,21 @@ public class AIManager {
      */
     public int getThreadPoolSize() {
         return threadPoolSize;
+    }
+
+    /**
+     * Get the executor service for async operations
+     * @return The thread pool executor
+     */
+    public ExecutorService getExecutor() {
+        return aiThreadPool;
+    }
+
+    /**
+     * Check if AI system is running
+     * @return true if running
+     */
+    public boolean isRunning() {
+        return isRunning;
     }
 }

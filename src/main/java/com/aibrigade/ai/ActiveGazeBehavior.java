@@ -2,6 +2,7 @@ package com.aibrigade.ai;
 
 import com.aibrigade.bots.BotEntity;
 import com.aibrigade.persistence.BotDatabase;
+import com.aibrigade.utils.*;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.entity.player.Player;
@@ -59,8 +60,8 @@ public class ActiveGazeBehavior extends Goal {
         this.setFlags(EnumSet.of(Goal.Flag.LOOK));
 
         // Configuration par défaut
-        this.lookAroundChance = 0.33f;  // 2/6 = 33%
-        this.lookAroundInterval = 40;   // 2 secondes
+        this.lookAroundChance = BotAIConstants.LOOK_AROUND_PROBABILITY;
+        this.lookAroundInterval = BotAIConstants.LOOK_AROUND_INTERVAL_TICKS;
         this.gazeState = GazeState.LOOKING_AT_LEADER;
         this.lookAroundTimer = lookAroundInterval;
     }
@@ -118,10 +119,10 @@ public class ActiveGazeBehavior extends Goal {
             return;
         }
 
-        LivingEntity leader = findLeader(leaderId);
+        LivingEntity leader = EntityFinder.findEntityByUUID(bot.level(), leaderId, bot.position(), 100.0);
         if (leader != null) {
             // Regarder le leader avec un peu d'inertie
-            bot.getLookControl().setLookAt(leader, 10.0F, 10.0F);
+            BotLookHelper.lookAtEntity(bot, leader);
         }
 
         // Timer pour décider de regarder ailleurs
@@ -136,7 +137,7 @@ public class ActiveGazeBehavior extends Goal {
                 lookTargetChangeTimer = 0;
 
                 // Générer une première cible de regard
-                generateRandomLookTarget();
+                lookTarget = BotLookHelper.getRandomLookTarget(bot);
             }
 
             // Reset le timer
@@ -159,13 +160,13 @@ public class ActiveGazeBehavior extends Goal {
         // Changer de cible de regard de temps en temps
         lookTargetChangeTimer--;
         if (lookTargetChangeTimer <= 0) {
-            generateRandomLookTarget();
+            lookTarget = BotLookHelper.getRandomLookTarget(bot);
             lookTargetChangeTimer = 15 + random.nextInt(25); // 0.75 - 2 secondes
         }
 
         // Regarder vers la cible avec fluidité
         if (lookTarget != null) {
-            bot.getLookControl().setLookAt(lookTarget.x, lookTarget.y, lookTarget.z, 5.0F, 5.0F);
+            BotLookHelper.lookAtPosition(bot, lookTarget, 5.0F, 5.0F);
         }
     }
 
@@ -180,10 +181,10 @@ public class ActiveGazeBehavior extends Goal {
             return;
         }
 
-        LivingEntity leader = findLeader(leaderId);
+        LivingEntity leader = EntityFinder.findEntityByUUID(bot.level(), leaderId, bot.position(), 100.0);
         if (leader != null) {
             // Regarder le leader avec une rotation fluide
-            bot.getLookControl().setLookAt(leader, 8.0F, 8.0F);
+            BotLookHelper.lookAtEntity(bot, leader, 8.0F, 8.0F);
 
             // Vérifier si on regarde bien le leader maintenant
             Vec3 lookVec = bot.getViewVector(1.0F);
@@ -197,56 +198,6 @@ public class ActiveGazeBehavior extends Goal {
         } else {
             gazeState = GazeState.LOOKING_AT_LEADER;
         }
-    }
-
-    /**
-     * Génère une cible de regard aléatoire autour du bot
-     */
-    private void generateRandomLookTarget() {
-        Vec3 botPos = bot.position();
-        Vec3 eyePos = bot.getEyePosition();
-
-        // Angle horizontal aléatoire (éviter de regarder derrière)
-        double angle = bot.getYRot() * Math.PI / 180.0;
-        double angleOffset = (random.nextDouble() - 0.5) * Math.PI; // ±90 degrés
-        double finalAngle = angle + angleOffset;
-
-        // Distance de regard (5 - 20 blocs)
-        double distance = 5 + random.nextDouble() * 15;
-
-        // Hauteur de regard (niveau des yeux ± 2 blocs)
-        double heightOffset = (random.nextDouble() - 0.5) * 4;
-
-        // Calculer la position cible
-        double targetX = botPos.x + Math.cos(finalAngle) * distance;
-        double targetY = eyePos.y + heightOffset;
-        double targetZ = botPos.z + Math.sin(finalAngle) * distance;
-
-        lookTarget = new Vec3(targetX, targetY, targetZ);
-    }
-
-    /**
-     * Trouve le leader par son UUID
-     */
-    private LivingEntity findLeader(UUID leaderId) {
-        Level level = bot.level();
-
-        // Chercher dans les joueurs
-        for (Player player : level.players()) {
-            if (player.getUUID().equals(leaderId)) {
-                return player;
-            }
-        }
-
-        // Chercher dans les autres bots
-        for (BotEntity otherBot : level.getEntitiesOfClass(BotEntity.class,
-                bot.getBoundingBox().inflate(50.0))) {
-            if (otherBot.getUUID().equals(leaderId)) {
-                return otherBot;
-            }
-        }
-
-        return null;
     }
 
     /**

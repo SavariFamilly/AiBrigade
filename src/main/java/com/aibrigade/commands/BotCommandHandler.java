@@ -414,12 +414,31 @@ public class BotCommandHandler {
     private static int removeBot(CommandContext<CommandSourceStack> context) {
         String botName = StringArgumentType.getString(context, "botName");
 
-        // TODO: Implement bot removal by name
-        context.getSource().sendSuccess(() ->
-            Component.literal("Removed bot '" + botName + "'"),
-            true);
+        BotManager botManager = AIBrigadeMod.getBotManager();
+        if (botManager == null) {
+            context.getSource().sendFailure(Component.literal("Bot manager not initialized"));
+            return 0;
+        }
 
-        return 1;
+        // Find bot by name
+        var bot = botManager.findBotByName(botName);
+        if (bot == null) {
+            context.getSource().sendFailure(Component.literal("Bot '" + botName + "' not found"));
+            return 0;
+        }
+
+        // Remove the bot
+        boolean removed = botManager.removeBot(bot.getUUID());
+
+        if (removed) {
+            context.getSource().sendSuccess(() ->
+                Component.literal("Removed bot '" + botName + "'"),
+                true);
+            return 1;
+        } else {
+            context.getSource().sendFailure(Component.literal("Failed to remove bot"));
+            return 0;
+        }
     }
 
     /**

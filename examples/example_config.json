@@ -1,0 +1,27 @@
+{
+  "version": "1.0",
+  "timestamp": 1699876543210,
+  "config": {
+    "maxBots": 300,
+    "autoSave": true,
+    "saveInterval": 300,
+    "defaultBehavior": "idle",
+    "defaultFollowRadius": 10.0,
+    "enableDebug": false,
+    "enableAnimations": true,
+    "enablePathfinding": true,
+    "aiThreadCount": 4,
+    "pathfindingProvider": "vanilla",
+    "defaultNamePreset": "realistic",
+    "randomizeNames": true,
+    "randomizeArmor": false,
+    "enableGroupHostility": true,
+    "enableObstacleClimbing": true,
+    "maxFollowRadius": 50.0,
+    "minFollowRadius": 1.0,
+    "defaultHealth": 20.0,
+    "defaultArmor": 2.0,
+    "defaultSpeed": 0.3,
+    "defaultAttackDamage": 2.0
+  }
+}

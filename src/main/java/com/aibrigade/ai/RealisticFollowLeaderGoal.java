@@ -2,6 +2,7 @@ package com.aibrigade.ai;
 
 import com.aibrigade.bots.BotEntity;
 import com.aibrigade.persistence.BotDatabase;
+import com.aibrigade.utils.*;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.entity.player.Player;
@@ -36,13 +37,11 @@ public class RealisticFollowLeaderGoal extends Goal {
 
     // Comportement selon le cahier des charges
     private FollowBehaviorType behaviorType;  // Type de comportement (RADIUS_BASED ou ACTIVE_FOLLOW)
-    private static final float ACTIVE_FOLLOW_PROBABILITY = 1.0f / 6.0f; // 1/6 = ~16.67%
 
     // Comportement aléatoire
     private float chaseChance;           // Probabilité de suivre activement (0.0 - 1.0)
     private boolean isActivelyChasing;   // Est-ce que ce bot est en train de poursuivre?
     private int chaseDecisionCooldown;   // Cooldown pour recalculer la décision
-    private static final int DECISION_INTERVAL = 40; // 2 secondes
 
     /**
      * Types de comportement de follow
@@ -55,12 +54,10 @@ public class RealisticFollowLeaderGoal extends Goal {
     // Mouvement réaliste
     private Vec3 targetPosition;         // Position cible unique du bot
     private int recalculatePathTimer;
-    private static final int PATH_RECALC_INTERVAL = 20; // 1 seconde
 
     // Variation de vitesse
     private double currentSpeedMultiplier;
     private int speedChangeTimer;
-    private static final int SPEED_CHANGE_INTERVAL = 30; // 1.5 secondes
 
     // Pause aléatoire
     private int pauseTimer;
@@ -80,7 +77,7 @@ public class RealisticFollowLeaderGoal extends Goal {
         this.setFlags(EnumSet.of(Goal.Flag.MOVE, Goal.Flag.LOOK));
 
         // Déterminer le type de comportement selon les probabilités (1/6 vs 5/6)
-        if (random.nextFloat() < ACTIVE_FOLLOW_PROBABILITY) {
+        if (random.nextFloat() < BotAIConstants.ACTIVE_FOLLOW_PROBABILITY) {
             this.behaviorType = FollowBehaviorType.ACTIVE_FOLLOW;
             this.chaseChance = 0.95f; // Suit activement presque toujours
         } else {
@@ -98,13 +95,8 @@ public class RealisticFollowLeaderGoal extends Goal {
 
     @Override
     public boolean canUse() {
-        // Vérifier le mode statique
-        if (bot.isStatic()) {
-            return false;
-        }
-
-        // Le bot doit suivre un leader
-        if (!bot.isFollowingLeader()) {
+        // Vérifier le mode statique et le follow
+        if (!EntityValidator.isBotAIReady(bot) || !bot.isFollowingLeader()) {
             return false;
         }
 
@@ -114,13 +106,13 @@ public class RealisticFollowLeaderGoal extends Goal {
         }
 
         // Trouver le leader
-        LivingEntity leader = findLeader(leaderId);
+        LivingEntity leader = EntityFinder.findEntityByUUID(bot.level(), leaderId, bot.position(), 100.0);
         if (leader == null) {
             return false;
         }
 
         // Distance au leader
-        double distance = bot.distanceTo(leader);
+        double distance = DistanceHelper.getDistance(bot, leader);
 
         // Comportement selon le type
         if (behaviorType == FollowBehaviorType.ACTIVE_FOLLOW) {
@@ -145,7 +137,7 @@ public class RealisticFollowLeaderGoal extends Goal {
     @Override
     public boolean canContinueToUse() {
         // Vérifier le mode statique
-        if (bot.isStatic()) {
+        if (!EntityValidator.isBotAIReady(bot)) {
             return false;
         }
 
@@ -154,12 +146,12 @@ public class RealisticFollowLeaderGoal extends Goal {
             return false;
         }
 
-        LivingEntity leader = findLeader(leaderId);
+        LivingEntity leader = EntityFinder.findEntityByUUID(bot.level(), leaderId, bot.position(), 100.0);
         if (leader == null) {
             return false;
         }
 
-        double distance = bot.distanceTo(leader);
+        double distance = DistanceHelper.getDistance(bot, leader);
 
         // Si trop proche, arrêter
         if (distance < minFollowDistance) {
@@ -192,7 +184,7 @@ public class RealisticFollowLeaderGoal extends Goal {
         UUID leaderId = bot.getLeaderId();
         if (leaderId == null) return;
 
-        LivingEntity leader = findLeader(leaderId);
+        LivingEntity leader = EntityFinder.findEntityByUUID(bot.level(), leaderId, bot.position(), 100.0);
         if (leader == null) return;
 
         // === 1. Décision de chase (probabilité) ===
@@ -202,9 +194,9 @@ public class RealisticFollowLeaderGoal extends Goal {
         }
 
         // Si pas en train de chase et dans le rayon, ne rien faire
-        double distance = bot.distanceTo(leader);
+        double distance = DistanceHelper.getDistance(bot, leader);
         if (!isActivelyChasing && distance < maxFollowDistance) {
-            bot.getNavigation().stop();
+            BotMovementHelper.stopMovement(bot);
             return;
         }
 
@@ -214,7 +206,7 @@ public class RealisticFollowLeaderGoal extends Goal {
             if (pauseTimer <= 0) {
                 isPaused = false;
             }
-            bot.getNavigation().stop();
+            BotMovementHelper.stopMovement(bot);
             return;
         }
 
@@ -230,7 +222,7 @@ public class RealisticFollowLeaderGoal extends Goal {
         if (speedChangeTimer <= 0) {
             // Changer légèrement la vitesse (0.85x - 1.15x)
             currentSpeedMultiplier = 0.85 + random.nextDouble() * 0.3;
-            speedChangeTimer = SPEED_CHANGE_INTERVAL;
+            speedChangeTimer = BotAIConstants.SPEED_CHANGE_INTERVAL_TICKS;
         }
 
         // === 4. Trajectoire courbe ===
@@ -251,7 +243,7 @@ public class RealisticFollowLeaderGoal extends Goal {
                 // Radius-based: vise une position dans le radius
                 targetPosition = calculateSpreadPosition(leader);
             }
-            recalculatePathTimer = PATH_RECALC_INTERVAL;
+            recalculatePathTimer = BotAIConstants.PATH_RECALC_INTERVAL_TICKS;
         }
 
         // === 6. Appliquer la trajectoire courbe ===
@@ -278,15 +270,15 @@ public class RealisticFollowLeaderGoal extends Goal {
         }
 
         // Naviguer vers la position
-        bot.getNavigation().moveTo(curvedTarget.x, curvedTarget.y, curvedTarget.z, finalSpeed);
+        BotMovementHelper.moveToPosition(bot, curvedTarget, finalSpeed);
 
         // === 8. Regarder le leader ===
-        bot.getLookControl().setLookAt(leader, 30.0F, 30.0F);
+        BotLookHelper.lookAtEntity(bot, leader, BotAIConstants.LOOK_YAW_SPEED_FAST, BotAIConstants.LOOK_PITCH_SPEED_FAST);
     }
 
     @Override
     public void stop() {
-        bot.getNavigation().stop();
+        BotMovementHelper.stopMovement(bot);
         targetPosition = null;
     }
 
@@ -304,7 +296,7 @@ public class RealisticFollowLeaderGoal extends Goal {
         isActivelyChasing = random.nextFloat() < chaseChance;
 
         // Reset le cooldown
-        chaseDecisionCooldown = DECISION_INTERVAL;
+        chaseDecisionCooldown = BotAIConstants.DECISION_INTERVAL_TICKS;
     }
 
     /**
@@ -337,8 +329,7 @@ public class RealisticFollowLeaderGoal extends Goal {
 
         for (int dy = -3; dy <= 3; dy++) {
             BlockPos checkPos = groundPos.offset(0, dy, 0);
-            if (!level.getBlockState(checkPos).isAir() &&
-                level.getBlockState(checkPos.above()).isAir()) {
+            if (BlockHelper.isSolidBlock(level, checkPos) && BlockHelper.isAirBlock(level, checkPos.above())) {
                 return new Vec3(targetPos.x, checkPos.getY() + 1, targetPos.z);
             }
         }
@@ -380,8 +371,7 @@ public class RealisticFollowLeaderGoal extends Goal {
         // Chercher le bloc solide le plus proche
         for (int dy = -3; dy <= 3; dy++) {
             BlockPos checkPos = groundPos.offset(0, dy, 0);
-            if (!level.getBlockState(checkPos).isAir() &&
-                level.getBlockState(checkPos.above()).isAir()) {
+            if (BlockHelper.isSolidBlock(level, checkPos) && BlockHelper.isAirBlock(level, checkPos.above())) {
                 return new Vec3(targetPos.x, checkPos.getY() + 1, targetPos.z);
             }
         }
@@ -401,30 +391,6 @@ public class RealisticFollowLeaderGoal extends Goal {
 
         // Appliquer l'offset de courbe
         return target.add(perpendicular.scale(curveOffset));
-    }
-
-    /**
-     * Trouve le leader par son UUID
-     */
-    private LivingEntity findLeader(UUID leaderId) {
-        Level level = bot.level();
-
-        // Chercher dans les joueurs
-        for (Player player : level.players()) {
-            if (player.getUUID().equals(leaderId)) {
-                return player;
-            }
-        }
-
-        // Chercher dans les autres bots (leader bot)
-        for (BotEntity otherBot : level.getEntitiesOfClass(BotEntity.class,
-                bot.getBoundingBox().inflate(100.0))) {
-            if (otherBot.getUUID().equals(leaderId)) {
-                return otherBot;
-            }
-        }
-
-        return null;
     }
 
     /**

@@ -1,0 +1,184 @@
+plugins {
+    id 'eclipse'
+    id 'maven-publish'
+    id 'net.minecraftforge.gradle' version '6.0.29'
+}
+
+version = '1.0.0'
+group = 'com.aibrigade'
+archivesBaseName = 'aibrigade'
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(17)
+
+println "Java: ${System.getProperty 'java.version'}, JVM: ${System.getProperty 'java.vm.version'} (${System.getProperty 'java.vendor'}), Arch: ${System.getProperty 'os.arch'}"
+
+minecraft {
+    mappings channel: 'official', version: '1.20.1'
+
+    // accessTransformer = file('src/main/resources/META-INF/accesstransformer.cfg')
+
+    runs {
+        client {
+            workingDirectory project.file('run')
+            property 'forge.logging.markers', 'REGISTRIES'
+            property 'forge.logging.console.level', 'debug'
+            property 'forge.enabledGameTestNamespaces', 'aibrigade'
+
+            mods {
+                aibrigade {
+                    source sourceSets.main
+                }
+            }
+        }
+
+        server {
+            workingDirectory project.file('run')
+            property 'forge.logging.markers', 'REGISTRIES'
+            property 'forge.logging.console.level', 'debug'
+            property 'forge.enabledGameTestNamespaces', 'aibrigade'
+
+            mods {
+                aibrigade {
+                    source sourceSets.main
+                }
+            }
+        }
+
+        data {
+            workingDirectory project.file('run')
+            property 'forge.logging.markers', 'REGISTRIES'
+            property 'forge.logging.console.level', 'debug'
+
+            args '--mod', 'aibrigade', '--all', '--output', file('src/generated/resources/'), '--existing', file('src/main/resources/')
+
+            mods {
+                aibrigade {
+                    source sourceSets.main
+                }
+            }
+        }
+    }
+}
+
+sourceSets.main.resources { srcDir 'src/generated/resources' }
+
+repositories {
+    maven {
+        // GeckoLib
+        name = 'Geckolib'
+        url = 'https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/'
+    }
+    maven {
+        // SmartBrainLib (Tslat Maven)
+        name = 'Tslat'
+        url = 'https://maven.tslat.net'
+    }
+    maven {
+        // CurseForge Maven
+        name = 'CurseForge'
+        url = 'https://cursemaven.com'
+        content {
+            includeGroup "curse.maven"
+        }
+    }
+    maven {
+        // Modrinth Maven
+        name = "Modrinth"
+        url = "https://api.modrinth.com/maven"
+    }
+}
+
+dependencies {
+    minecraft 'net.minecraftforge:forge:1.20.1-47.3.0'
+
+    // === CORE AI LIBRARIES ===
+
+    // SmartBrainLib - Advanced AI behaviors
+    // Version 1.15 for Minecraft 1.21.1 - Temporarily disabled due to dependency issues
+    // implementation fg.deobf("curse.maven:smartbrainlib-661293:5535305")
+
+    // === ANIMATION LIBRARIES ===
+
+    // GeckoLib - Animations library for bot animations
+    // TEMPORARILY DISABLED - Dependency resolution issues
+    // Will need to be added manually or via different method
+    // implementation fg.deobf('software.bernie.geckolib:geckolib-forge-1.21:4.5.8')
+
+    // Citadel - Entity framework and utilities
+    // Version 2.6.1 for Minecraft 1.20.1 - DISABLED due to mixin incompatibility
+    // The LivingEntityMixin in Citadel targets methods that don't exist in 1.20.1
+    // Our mod works without Citadel for now - can be added later if needed
+    // implementation fg.deobf("curse.maven:citadel-331936:6002521")
+
+    // === NPC & ENTITY LIBRARIES ===
+
+    // Easy NPC - Custom NPCs with skins, inventory, weapons
+    // TEMPORARILY COMMENTED - Need to find 1.21.8 version
+    // Version 5.9.0 for Minecraft 1.21.1 Forge
+    // implementation fg.deobf("curse.maven:easy-npc-559312:5947970")
+
+    // LibX - Utility library for mod development
+    // Version 1.20.1-5.0.12 for Minecraft 1.20.1 (compatible with 1.21.1)
+    implementation fg.deobf("curse.maven:libx-412525:4947474")
+
+    // === NOT AVAILABLE FOR 1.20.1 ===
+    // - Controllable (controller support - not needed for bot AI)
+    // - LLibrary / AnimationAPI (only supports up to 1.12.2)
+    // - MalisisCore (only supports up to 1.12.2)
+    // - Baritone API (standalone mod, not a library dependency - use separately)
+    // - VoxelMap API (standalone mod, not a library dependency)
+}
+
+tasks.named('processResources', ProcessResources).configure {
+    var replaceProperties = [
+        minecraft_version   : '1.20.1',
+        minecraft_version_range: '[1.20.1,1.21)',
+        forge_version       : '47.3.0',
+        forge_version_range : '[47,)',
+        loader_version_range: '[47,)',
+        mod_id              : 'aibrigade',
+        mod_name            : 'AIBrigade',
+        mod_version         : version,
+        mod_authors         : 'AIBrigade Team',
+        mod_description     : 'Spawn and control up to 300+ AI bot NPCs with advanced behaviors'
+    ]
+
+    inputs.properties replaceProperties
+
+    filesMatching(['META-INF/mods.toml', 'pack.mcmeta']) {
+        expand replaceProperties + [project: project]
+    }
+}
+
+tasks.named('jar', Jar).configure {
+    manifest {
+        attributes([
+            'Specification-Title'     : 'aibrigade',
+            'Specification-Vendor'    : 'AIBrigade Team',
+            'Specification-Version'   : '1',
+            'Implementation-Title'    : project.name,
+            'Implementation-Version'  : project.jar.archiveVersion,
+            'Implementation-Vendor'   : 'AIBrigade Team',
+            'Implementation-Timestamp': new Date().format("yyyy-MM-dd'T'HH:mm:ssZ")
+        ])
+    }
+
+    finalizedBy 'reobfJar'
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            artifact jar
+        }
+    }
+    repositories {
+        maven {
+            url "file://${project.projectDir}/mcmodsrepo"
+        }
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}

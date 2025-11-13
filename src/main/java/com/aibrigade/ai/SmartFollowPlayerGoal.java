@@ -2,6 +2,7 @@ package com.aibrigade.ai;
 
 import com.aibrigade.bots.BotBehaviorConfig;
 import com.aibrigade.bots.BotEntity;
+import com.aibrigade.utils.*;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.entity.player.Player;
@@ -24,12 +25,11 @@ public class SmartFollowPlayerGoal extends Goal {
     private final BotBehaviorConfig config;
     private Player targetPlayer;
     private int recheckTime;
-    private final float teleportDistance = 50.0F;
 
     // Pour le calcul de vitesse du joueur
     private Vec3 lastPlayerPos;
     private int speedCheckTicks = 0;
-    private double currentSpeedMultiplier = 1.0;
+    private double currentSpeedMultiplier = BotAIConstants.SPEED_WALK;
 
     public SmartFollowPlayerGoal(BotEntity bot, BotBehaviorConfig config) {
         this.bot = bot;
@@ -52,19 +52,13 @@ public class SmartFollowPlayerGoal extends Goal {
         }
 
         // Ne pas suivre si trop proche
-        double distance = this.bot.distanceToSqr(this.targetPlayer);
         float minDist = config.getFollowDistance();
-
-        if (distance < (double)(minDist * minDist)) {
-            return false;
-        }
-
-        return true;
+        return DistanceHelper.isOutsideDistance(this.bot, this.targetPlayer, minDist);
     }
 
     @Override
     public boolean canContinueToUse() {
-        if (this.targetPlayer == null || !this.targetPlayer.isAlive()) {
+        if (!EntityValidator.isEntityValid(this.targetPlayer)) {
             return false;
         }
 
@@ -72,11 +66,10 @@ public class SmartFollowPlayerGoal extends Goal {
             return false;
         }
 
-        double distance = this.bot.distanceToSqr(this.targetPlayer);
         float maxDist = config.getOperationRadius();
 
         // Continue tant qu'on est dans le rayon d'opération
-        return distance <= (double)(maxDist * maxDist);
+        return DistanceHelper.isWithinDistance(this.bot, this.targetPlayer, maxDist);
     }
 
     @Override
@@ -84,13 +77,13 @@ public class SmartFollowPlayerGoal extends Goal {
         this.recheckTime = 0;
         this.lastPlayerPos = this.targetPlayer.position();
         this.speedCheckTicks = 0;
-        this.currentSpeedMultiplier = 1.0;
+        this.currentSpeedMultiplier = BotAIConstants.SPEED_WALK;
     }
 
     @Override
     public void stop() {
         this.targetPlayer = null;
-        this.bot.getNavigation().stop();
+        BotMovementHelper.stopMovement(this.bot);
         this.lastPlayerPos = null;
     }
 
@@ -101,20 +94,11 @@ public class SmartFollowPlayerGoal extends Goal {
         }
 
         // Regarder le joueur
-        this.bot.getLookControl().setLookAt(
-            this.targetPlayer,
-            10.0F,
-            (float)this.bot.getMaxHeadXRot()
-        );
-
-        double distance = this.bot.distanceToSqr(this.targetPlayer);
+        BotLookHelper.lookAtEntityWithMaxRotation(this.bot, this.targetPlayer);
 
         // Téléportation si trop loin
-        if (distance > (double)(this.teleportDistance * this.teleportDistance)) {
-            if (this.targetPlayer.level() == this.bot.level()) {
-                teleportNearPlayer();
-                return;
-            }
+        if (BotMovementHelper.teleportIfTooFar(this.bot, this.targetPlayer, BotAIConstants.TELEPORT_DISTANCE)) {
+            return;
         }
 
         // Calculer la vitesse du joueur toutes les 5 ticks
@@ -132,8 +116,8 @@ public class SmartFollowPlayerGoal extends Goal {
 
             // Ne pas pathfind si très proche
             float minDist = config.getFollowDistance();
-            if (distance <= (double)(minDist * minDist)) {
-                this.bot.getNavigation().stop();
+            if (DistanceHelper.isWithinDistance(this.bot, this.targetPlayer, minDist)) {
+                BotMovementHelper.stopMovement(this.bot);
                 return;
             }
 
@@ -141,15 +125,12 @@ public class SmartFollowPlayerGoal extends Goal {
             checkAndHandleObstacles();
 
             // Pathfind vers le joueur avec la vitesse adaptée
-            this.bot.getNavigation().moveTo(
-                this.targetPlayer,
-                this.currentSpeedMultiplier
-            );
+            BotMovementHelper.moveToEntity(this.bot, this.targetPlayer, this.currentSpeedMultiplier);
         }
 
         // Gestion du saut pour obstacles
         if (config.canJumpObstacles() && shouldJump()) {
-            this.bot.getJumpControl().jump();
+            BotJumpHelper.jump(this.bot);
         }
     }
 
@@ -173,16 +154,16 @@ public class SmartFollowPlayerGoal extends Goal {
 
         if (distanceMoved > 0.3) {
             // Joueur court/sprint
-            this.currentSpeedMultiplier = 1.5;
+            this.currentSpeedMultiplier = BotAIConstants.SPEED_SPRINT;
         } else if (distanceMoved > 0.15) {
             // Joueur marche vite
-            this.currentSpeedMultiplier = 1.2;
+            this.currentSpeedMultiplier = BotAIConstants.SPEED_RUN;
         } else if (distanceMoved > 0.05) {
             // Joueur marche
-            this.currentSpeedMultiplier = 1.0;
+            this.currentSpeedMultiplier = BotAIConstants.SPEED_WALK;
         } else {
             // Joueur arrêté ou marche lentement
-            this.currentSpeedMultiplier = 0.8;
+            this.currentSpeedMultiplier = BotAIConstants.SPEED_SLOW;
         }
     }
 
@@ -228,14 +209,11 @@ public class SmartFollowPlayerGoal extends Goal {
             (int)Math.round(lookVec.z)
         );
 
-        BlockState frontBlock = this.bot.level().getBlockState(frontPos);
-
         // Sauter si bloc solide devant et air au-dessus
-        if (!frontBlock.isAir() && frontBlock.isSolid()) {
+        if (BlockHelper.isSolidBlock(this.bot.level(), frontPos)) {
             BlockPos abovePos = frontPos.above();
-            BlockState aboveBlock = this.bot.level().getBlockState(abovePos);
 
-            if (aboveBlock.isAir()) {
+            if (BlockHelper.isAirBlock(this.bot.level(), abovePos)) {
                 return true;
             }
         }
@@ -243,7 +221,7 @@ public class SmartFollowPlayerGoal extends Goal {
         // Sauter si le joueur est plus haut
         if (this.targetPlayer != null) {
             double heightDiff = this.targetPlayer.getY() - this.bot.getY();
-            if (heightDiff > 0.5 && heightDiff < 2.0) {
+            if (BotJumpHelper.isJumpableHeight(heightDiff)) {
                 return true;
             }
         }
@@ -268,7 +246,7 @@ public class SmartFollowPlayerGoal extends Goal {
 
         // S'assurer qu'il y a un sol
         while (targetPos.getY() > this.targetPlayer.getY() - 3 &&
-               this.bot.level().getBlockState(targetPos.below()).isAir()) {
+               BlockHelper.isAirBlock(this.bot.level(), targetPos.below())) {
             targetPos = targetPos.below();
         }
 
@@ -287,13 +265,7 @@ public class SmartFollowPlayerGoal extends Goal {
             return null;
         }
 
-        // Chercher le joueur avec cet UUID
-        for (Player player : this.bot.level().players()) {
-            if (player.getUUID().equals(leaderId)) {
-                return player;
-            }
-        }
-
-        return null;
+        // Utiliser EntityFinder pour trouver le joueur
+        return EntityFinder.findPlayerByUUID(this.bot.level(), leaderId);
     }
 }

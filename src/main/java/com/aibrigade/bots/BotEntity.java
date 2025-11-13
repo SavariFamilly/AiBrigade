@@ -1,6 +1,5 @@
 package com.aibrigade.bots;
 
-import com.aibrigade.ai.FollowLeaderGoal;
 import com.aibrigade.ai.RealisticFollowLeaderGoal;
 import com.aibrigade.ai.ActiveGazeBehavior;
 import com.aibrigade.ai.TeamAwareAttackGoal;
@@ -614,11 +613,21 @@ public class BotEntity extends PathfinderMob {
         }
 
         if (tag.contains("AIState")) {
-            aiState = BotAIState.valueOf(tag.getString("AIState"));
+            try {
+                aiState = BotAIState.valueOf(tag.getString("AIState"));
+            } catch (IllegalArgumentException e) {
+                aiState = BotAIState.IDLE; // Default fallback for corrupted data
+                com.aibrigade.main.AIBrigadeMod.LOGGER.warn("Invalid AIState in saved data, using IDLE: {}", e.getMessage());
+            }
         }
 
         if (tag.contains("Role")) {
-            role = BotRole.valueOf(tag.getString("Role"));
+            try {
+                role = BotRole.valueOf(tag.getString("Role"));
+            } catch (IllegalArgumentException e) {
+                role = BotRole.SOLDIER; // Default fallback for corrupted data
+                com.aibrigade.main.AIBrigadeMod.LOGGER.warn("Invalid Role in saved data, using SOLDIER: {}", e.getMessage());
+            }
         }
 
         spawnTime = tag.getLong("SpawnTime");
@@ -776,7 +785,7 @@ public class BotEntity extends PathfinderMob {
             // Cleanup from BotManager (works for both death and manual removal)
             com.aibrigade.main.AIBrigadeMod.getBotManager().onBotRemoved(this);
 
-            System.out.println("[BotEntity] Bot " + this.getBotName() + " removed and cleaned up");
+            com.aibrigade.main.AIBrigadeMod.LOGGER.info("Bot {} removed and cleaned up", this.getBotName());
         }
 
         super.remove(reason);

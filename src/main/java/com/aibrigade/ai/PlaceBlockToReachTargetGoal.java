@@ -1,6 +1,7 @@
 package com.aibrigade.ai;
 
 import com.aibrigade.bots.BotEntity;
+import com.aibrigade.utils.*;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.goal.Goal;
@@ -25,11 +26,11 @@ public class PlaceBlockToReachTargetGoal extends Goal {
     private LivingEntity target;
     private int placeCooldown = 0;
     private static final int PLACE_COOLDOWN_TICKS = 3; // 0.15 seconds between placements (very fast)
-    private static final double MIN_DISTANCE_TO_PLACE = 3.0; // Minimum distance to target to start placing
-    private static final double MAX_DISTANCE_TO_PLACE = 50.0; // Maximum distance to target to place blocks (increased)
+    private static final double MIN_DISTANCE_TO_PLACE = BotAIConstants.MIN_FOLLOW_DISTANCE;
+    private static final double MAX_DISTANCE_TO_PLACE = BotAIConstants.TELEPORT_DISTANCE;
     private Queue<BlockPos> plannedPath = new LinkedList<>();
     private int pathRecalculationTimer = 0;
-    private static final int PATH_RECALC_INTERVAL = 40; // Recalculate path every 2 seconds
+    private static final int PATH_RECALC_INTERVAL = BotAIConstants.DECISION_INTERVAL_TICKS;
     private static final int MAX_BLOCKS_TO_PLACE = 50; // Maximum blocks to plan (increased for tall structures)
 
     public PlaceBlockToReachTargetGoal(BotEntity bot) {
@@ -56,20 +57,16 @@ public class PlaceBlockToReachTargetGoal extends Goal {
             // Check if following leader
             if (bot.isFollowingLeader() && bot.getLeaderId() != null) {
                 // Try to find leader entity
-                target = bot.level().getPlayerByUUID(bot.getLeaderId());
-                if (target == null) {
-                    // Leader might be another bot
-                    target = findBotById(bot.getLeaderId());
-                }
+                target = EntityFinder.findLeader(bot);
             }
         }
 
-        if (target == null || !target.isAlive()) {
+        if (!EntityValidator.isEntityValid(target)) {
             return false;
         }
 
         // Check distance to target
-        double distance = bot.distanceTo(target);
+        double distance = DistanceHelper.getDistance(bot, target);
         if (distance < MIN_DISTANCE_TO_PLACE || distance > MAX_DISTANCE_TO_PLACE) {
             return false;
         }
@@ -132,7 +129,7 @@ public class PlaceBlockToReachTargetGoal extends Goal {
                 BlockPos aboveCheck = checkPos.above();
 
                 // If solid block at walking level or head level
-                if (!level.getBlockState(checkPos).isAir() || !level.getBlockState(aboveCheck).isAir()) {
+                if (BlockHelper.isSolidBlock(level, checkPos) || BlockHelper.isSolidBlock(level, aboveCheck)) {
                     wallsFound++;
                 } else {
                     airFound++;
@@ -144,7 +141,7 @@ public class PlaceBlockToReachTargetGoal extends Goal {
         if (wallsFound >= 6) {
             // Check if there's an opening above (can escape by building up)
             BlockPos above = botPos.above(2);
-            if (level.getBlockState(above).isAir()) {
+            if (BlockHelper.isAirBlock(level, above)) {
                 return true; // Enclosed but can build up to escape
             }
         }
@@ -158,12 +155,12 @@ public class PlaceBlockToReachTargetGoal extends Goal {
             );
 
             // Check if there's a wall in the way
-            if (!level.getBlockState(blockingPos).isAir() ||
-                !level.getBlockState(blockingPos.above()).isAir()) {
+            if (BlockHelper.isSolidBlock(level, blockingPos) ||
+                BlockHelper.isSolidBlock(level, blockingPos.above())) {
 
                 // Check if we can build up to go over it
                 BlockPos aboveWall = blockingPos.above(2);
-                if (level.getBlockState(aboveWall).isAir()) {
+                if (BlockHelper.isAirBlock(level, aboveWall)) {
                     return true; // Can build to go over the wall
                 }
             }
@@ -196,7 +193,7 @@ public class PlaceBlockToReachTargetGoal extends Goal {
             BlockPos below = nextPos.below();
             BlockPos below2 = nextPos.below(2);
 
-            if (level.getBlockState(below).isAir() && level.getBlockState(below2).isAir()) {
+            if (BlockHelper.isAirBlock(level, below) && BlockHelper.isAirBlock(level, below2)) {
                 return true; // Found a gap
             }
         }
@@ -216,8 +213,8 @@ public class PlaceBlockToReachTargetGoal extends Goal {
         if (ticksSinceLastNavCheck >= 20) { // Check every second
             ticksSinceLastNavCheck = 0;
 
-            if (bot.getNavigation().isDone() && target != null) {
-                double distance = bot.distanceTo(target);
+            if (BotMovementHelper.hasReachedDestination(bot) && target != null) {
+                double distance = DistanceHelper.getDistance(bot, target);
                 if (distance > MIN_DISTANCE_TO_PLACE) {
                     navigationFailCount++;
                 } else {
@@ -233,7 +230,7 @@ public class PlaceBlockToReachTargetGoal extends Goal {
 
     @Override
     public boolean canContinueToUse() {
-        if (target == null || !target.isAlive()) {
+        if (!EntityValidator.isEntityValid(target)) {
             return false;
         }
 
@@ -268,12 +265,12 @@ public class PlaceBlockToReachTargetGoal extends Goal {
             BlockPos nextPos = plannedPath.peek();
             if (nextPos != null && nextPos.equals(bot.blockPosition().above())) {
                 // Looking down to place block under feet
-                bot.getLookControl().setLookAt(bot.getX(), bot.getY() - 1, bot.getZ());
+                BotLookHelper.lookAtPosition(bot, new Vec3(bot.getX(), bot.getY() - 1, bot.getZ()));
             } else {
-                bot.getLookControl().setLookAt(target, 30.0F, 30.0F);
+                BotLookHelper.lookAtEntity(bot, target, BotAIConstants.LOOK_YAW_SPEED_FAST, BotAIConstants.LOOK_PITCH_SPEED_FAST);
             }
         } else {
-            bot.getLookControl().setLookAt(target, 30.0F, 30.0F);
+            BotLookHelper.lookAtEntity(bot, target, BotAIConstants.LOOK_YAW_SPEED_FAST, BotAIConstants.LOOK_PITCH_SPEED_FAST);
         }
 
         // Recalculate path periodically
@@ -301,14 +298,14 @@ public class PlaceBlockToReachTargetGoal extends Goal {
                         placeCooldown = PLACE_COOLDOWN_TICKS;
 
                         // Jump up after placing
-                        bot.getJumpControl().jump();
+                        BotJumpHelper.jump(bot);
                         return;
                     } else {
                         plannedPath.poll(); // Can't place, skip
                     }
                 }
                 // Normal placement - check if close enough
-                else if (bot.blockPosition().distSqr(nextPos) <= 25) { // Within 5 blocks
+                else if (DistanceHelper.isWithinDistance(bot, nextPos, 5.0)) { // Within 5 blocks
                     if (canPlaceBlockAt(nextPos)) {
                         placeBlock(nextPos);
                         plannedPath.poll();
@@ -318,17 +315,17 @@ public class PlaceBlockToReachTargetGoal extends Goal {
                         if (!plannedPath.isEmpty()) {
                             BlockPos next = plannedPath.peek();
                             if (next != null) {
-                                bot.getNavigation().moveTo(next.getX(), next.getY(), next.getZ(), 1.0);
+                                BotMovementHelper.moveToBlockPos(bot, next, BotAIConstants.SPEED_WALK);
                             }
                         } else {
-                            bot.getNavigation().moveTo(target, 1.0);
+                            BotMovementHelper.moveToEntity(bot, target);
                         }
                     } else {
                         plannedPath.poll(); // Can't place, skip
                     }
                 } else {
                     // Move closer to placement position
-                    bot.getNavigation().moveTo(nextPos.getX(), nextPos.getY(), nextPos.getZ(), 1.0);
+                    BotMovementHelper.moveToBlockPos(bot, nextPos, BotAIConstants.SPEED_WALK);
                 }
             }
         }
@@ -349,10 +346,7 @@ public class PlaceBlockToReachTargetGoal extends Goal {
         Level level = bot.level();
 
         double heightDiff = target.getY() - bot.getY();
-        double horizontalDistance = Math.sqrt(
-            Math.pow(target.getX() - bot.getX(), 2) +
-            Math.pow(target.getZ() - bot.getZ(), 2)
-        );
+        double horizontalDistance = DistanceHelper.getHorizontalDistance(bot, target);
 
         // PRIORITY 1: If bot is enclosed/trapped, build up to escape
         if (isEnclosed()) {
@@ -387,7 +381,7 @@ public class PlaceBlockToReachTargetGoal extends Goal {
         // Build pillar up
         for (int y = 1; y <= escapeHeight; y++) {
             BlockPos pillarBlock = botPos.above(y);
-            if (level.getBlockState(pillarBlock).isAir()) {
+            if (BlockHelper.isAirBlock(level, pillarBlock)) {
                 plannedPath.offer(pillarBlock);
             }
         }
@@ -404,7 +398,7 @@ public class PlaceBlockToReachTargetGoal extends Goal {
         for (int dx = -1; dx <= 1; dx++) {
             for (int dz = -1; dz <= 1; dz++) {
                 BlockPos platformBlock = topPos.offset(dx, 0, dz);
-                if (level.getBlockState(platformBlock.below()).isAir()) {
+                if (BlockHelper.isAirBlock(level, platformBlock.below())) {
                     plannedPath.offer(platformBlock.below());
                 }
             }
@@ -425,7 +419,7 @@ public class PlaceBlockToReachTargetGoal extends Goal {
             BlockPos bridgeBlock = new BlockPos(x, y, z);
             BlockPos below = bridgeBlock.below();
 
-            if (level.getBlockState(below).isAir()) {
+            if (BlockHelper.isAirBlock(level, below)) {
                 plannedPath.offer(below);
             }
         }
@@ -440,7 +434,7 @@ public class PlaceBlockToReachTargetGoal extends Goal {
         // Build a pillar straight up
         for (int y = 1; y <= heightDiff + 2; y++) {
             BlockPos pillarBlock = botPos.above(y);
-            if (level.getBlockState(pillarBlock).isAir()) {
+            if (BlockHelper.isAirBlock(level, pillarBlock)) {
                 plannedPath.offer(pillarBlock);
             }
         }
@@ -466,7 +460,7 @@ public class PlaceBlockToReachTargetGoal extends Goal {
                 BlockPos bridgeBlock = new BlockPos(x, topY, z);
                 BlockPos below = bridgeBlock.below();
 
-                if (level.getBlockState(below).isAir()) {
+                if (BlockHelper.isAirBlock(level, below)) {
                     plannedPath.offer(below);
                 }
             }
@@ -505,7 +499,7 @@ public class PlaceBlockToReachTargetGoal extends Goal {
             if (stepPos.getY() > currentPos.getY()) {
                 for (int buildY = currentPos.getY() + 1; buildY <= stepPos.getY(); buildY++) {
                     BlockPos buildPos = new BlockPos(x, buildY, z);
-                    if (level.getBlockState(buildPos).isAir()) {
+                    if (BlockHelper.isAirBlock(level, buildPos)) {
                         plannedPath.offer(buildPos);
                     }
                 }
@@ -513,7 +507,7 @@ public class PlaceBlockToReachTargetGoal extends Goal {
 
             // Place block below for walking surface
             BlockPos below = stepPos.below();
-            if (level.getBlockState(below).isAir()) {
+            if (BlockHelper.isAirBlock(level, below)) {
                 plannedPath.offer(below);
             }
 
@@ -552,10 +546,10 @@ public class PlaceBlockToReachTargetGoal extends Goal {
             BlockPos below = checkPos.below();
 
             // Check for gaps and fill them
-            if (level.getBlockState(below).isAir()) {
+            if (BlockHelper.isAirBlock(level, below)) {
                 int depth = 0;
                 BlockPos checkBelow = below;
-                while (level.getBlockState(checkBelow).isAir() && depth < 5) {
+                while (BlockHelper.isAirBlock(level, checkBelow) && depth < 5) {
                     depth++;
                     checkBelow = checkBelow.below();
                 }
@@ -563,7 +557,7 @@ public class PlaceBlockToReachTargetGoal extends Goal {
                 // Fill from bottom up
                 for (int d = Math.min(depth, 4); d > 0; d--) {
                     BlockPos fillPos = checkPos.below(d);
-                    if (level.getBlockState(fillPos).isAir()) {
+                    if (BlockHelper.isAirBlock(level, fillPos)) {
                         plannedPath.offer(fillPos);
                     }
                 }
@@ -582,14 +576,14 @@ public class PlaceBlockToReachTargetGoal extends Goal {
         Level level = bot.level();
 
         // Position must be air
-        if (!level.getBlockState(pos).isAir()) {
+        if (!BlockHelper.canPlaceBlockAt(level, pos)) {
             return false;
         }
 
         // Must have a solid block nearby to place against
         for (net.minecraft.core.Direction dir : net.minecraft.core.Direction.values()) {
             BlockPos adjacent = pos.relative(dir);
-            if (!level.getBlockState(adjacent).isAir()) {
+            if (BlockHelper.isSolidBlock(level, adjacent)) {
                 return true; // Found solid block to place against
             }
         }
@@ -610,7 +604,7 @@ public class PlaceBlockToReachTargetGoal extends Goal {
         Level level = bot.level();
 
         // Check if position is valid
-        if (!level.getBlockState(pos).isAir()) {
+        if (!BlockHelper.canPlaceBlockAt(level, pos)) {
             return;
         }
 
@@ -641,20 +635,6 @@ public class PlaceBlockToReachTargetGoal extends Goal {
      */
     private boolean isNavigationStuck() {
         // If navigation is trying but not in progress, likely stuck
-        return !bot.getNavigation().isDone() && !bot.getNavigation().isInProgress();
-    }
-
-    /**
-     * Find a bot entity by UUID
-     */
-    private BotEntity findBotById(java.util.UUID id) {
-        if (bot.level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
-            for (net.minecraft.world.entity.Entity entity : serverLevel.getAllEntities()) {
-                if (entity instanceof BotEntity && entity.getUUID().equals(id)) {
-                    return (BotEntity) entity;
-                }
-            }
-        }
-        return null;
+        return !BotMovementHelper.hasReachedDestination(bot) && !BotMovementHelper.isMoving(bot);
     }
 }

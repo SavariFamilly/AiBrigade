@@ -1,0 +1,290 @@
+# AIBrigade Test Commands - Minecraft 1.20.1
+# Copier-coller ces commandes dans le jeu pour tester les fonctionnalités
+
+# ============================================
+# TESTS DE BASE - SPAWN
+# ============================================
+
+# Test 1: Spawn d'un bot solo
+/aibrigade spawn solo TestBot1
+
+# Test 2: Spawn à une position spécifique
+/aibrigade spawn solo Guard1 0 70 0
+
+# Test 3: Spawn d'un petit groupe
+/aibrigade spawn group Alpha 5
+
+# Test 4: Spawn d'un groupe moyen
+/aibrigade spawn group Beta 20
+
+# Test 5: Spawn d'un grand groupe (performance test)
+/aibrigade spawn group Gamma 50
+
+# ============================================
+# TESTS DE NOMS (Si setpreset implémenté)
+# ============================================
+
+# Test 6: Preset realistic
+/aibrigade setpreset TestBot1 preset:realistic
+
+# Test 7: Preset gamer
+/aibrigade setpreset Alpha preset:gamer
+
+# Test 8: Preset humor
+/aibrigade setpreset Beta preset:humor
+
+# Test 9: Preset randomize
+/aibrigade setpreset Gamma preset:randomize
+
+# Test 10: Preset mixed
+/aibrigade setpreset TestBot1 preset:mixed
+
+# ============================================
+# TESTS D'ÉQUIPEMENT
+# ============================================
+
+# Test 11: Armure diamant complète
+/aibrigade givearmor TestBot1 diamond
+
+# Test 12: Armure fer pour groupe
+/aibrigade givearmor Alpha iron
+
+# Test 13: Armure aléatoire
+/aibrigade givearmor Beta random
+
+# Test 14: Armure mixte
+/aibrigade givearmor Gamma mixed
+
+# Test 15: Armure netherite
+/aibrigade givearmor Guard1 netherite
+
+# ============================================
+# TESTS DE LEADERSHIP
+# ============================================
+
+# Test 16: Assigner un leader simple
+/aibrigade spawn solo Leader1
+/aibrigade spawn solo Follower1
+/aibrigade assignleader Follower1 Leader1
+
+# Test 17: Chain de leadership
+/aibrigade spawn solo ChiefLeader
+/aibrigade spawn solo SubLeader1
+/aibrigade spawn solo SubLeader2
+/aibrigade assignleader SubLeader1 ChiefLeader
+/aibrigade assignleader SubLeader2 SubLeader1
+
+# Test 18: Leader de groupe
+/aibrigade spawn group Squad1 10
+/aibrigade spawn solo SquadLeader
+/aibrigade assignleader Squad1 SquadLeader
+
+# ============================================
+# TESTS DE COMPORTEMENT
+# ============================================
+
+# Test 19: Comportement idle
+/aibrigade setbehavior TestBot1 idle
+
+# Test 20: Comportement follow
+/aibrigade setbehavior Follower1 follow
+
+# Test 21: Comportement patrol
+/aibrigade setbehavior Guard1 patrol
+
+# Test 22: Comportement guard
+/aibrigade setbehavior Guard1 guard
+
+# Test 23: Comportement attack
+/aibrigade setbehavior Alpha attack
+
+# ============================================
+# TESTS DE RAYON DE SUIVI
+# ============================================
+
+# Test 24: Rayon minimum
+/aibrigade setradius Follower1 1
+
+# Test 25: Rayon moyen
+/aibrigade setradius Follower1 10
+
+# Test 26: Rayon maximum
+/aibrigade setradius Follower1 50
+
+# Test 27: Rayon pour groupe
+/aibrigade setradius Alpha 15
+
+# ============================================
+# TESTS MODE STATIQUE
+# ============================================
+
+# Test 28: Toggle static on
+/aibrigade togglestatic Guard1
+
+# Test 29: Toggle static off (re-toggle)
+/aibrigade togglestatic Guard1
+
+# Test 30: Static sur groupe
+/aibrigade togglestatic Beta
+
+# ============================================
+# TESTS D'HOSTILITÉ
+# ============================================
+
+# Test 31: Activer hostilité
+/aibrigade hostile Alpha true
+
+# Test 32: Désactiver hostilité
+/aibrigade hostile Alpha false
+
+# Test 33: Hostilité entre groupes
+/aibrigade spawn group TeamRed 10
+/aibrigade spawn group TeamBlue 10
+/aibrigade hostile TeamRed true
+/aibrigade hostile TeamBlue true
+
+# ============================================
+# TESTS D'INFORMATION
+# ============================================
+
+# Test 34: Info d'un groupe
+/aibrigade groupinfo Alpha
+
+# Test 35: Liste des bots
+/aibrigade listbots
+
+# Test 36: Liste des groupes
+/aibrigade listgroups
+
+# ============================================
+# TESTS DE DEBUG
+# ============================================
+
+# Test 37: Activer debug
+/aibrigade debug enable
+
+# Test 38: Activer paths
+/aibrigade debug paths true
+
+# Test 39: Activer targets
+/aibrigade debug targets true
+
+# Test 40: Activer ranges
+/aibrigade debug ranges true
+
+# Test 41: Info du bot proche
+/aibrigade debug info
+
+# Test 42: Désactiver debug
+/aibrigade debug disable
+
+# ============================================
+# TESTS DE SUPPRESSION
+# ============================================
+
+# Test 43: Supprimer un bot
+/aibrigade removebot TestBot1
+
+# Test 44: Supprimer un groupe
+/aibrigade removegroup Beta
+
+# Test 45: Cleanup complet (supprimer tous les bots de test)
+/aibrigade removegroup Alpha
+/aibrigade removegroup Gamma
+/aibrigade removegroup TeamRed
+/aibrigade removegroup TeamBlue
+/aibrigade removebot Leader1
+/aibrigade removebot Follower1
+/aibrigade removebot Guard1
+/aibrigade removebot ChiefLeader
+/aibrigade removebot SubLeader1
+/aibrigade removebot SubLeader2
+/aibrigade removebot SquadLeader
+
+# ============================================
+# TESTS DE PERFORMANCE
+# ============================================
+
+# Test 46: Spawn 100 bots (ATTENTION: lag possible)
+/aibrigade spawn group Performance100 100
+
+# Test 47: Spawn 200 bots (ATTENTION: lag important possible)
+/aibrigade spawn group Performance200 200
+
+# Test 48: Spawn 300 bots (MAXIMUM - ATTENTION: lag très important possible)
+/aibrigade spawn group Performance300 300
+
+# Cleanup performance tests
+/aibrigade removegroup Performance100
+/aibrigade removegroup Performance200
+/aibrigade removegroup Performance300
+
+# ============================================
+# SCÉNARIOS COMPLEXES
+# ============================================
+
+# Scénario 1: Base défensive avec gardes statiques
+/aibrigade spawn group BaseGuards 4 0 70 0
+/aibrigade givearmor BaseGuards diamond
+/aibrigade setbehavior BaseGuards guard
+/aibrigade togglestatic BaseGuards
+
+# Scénario 2: Escouade mobile avec leader
+/aibrigade spawn solo SquadCaptain 100 64 100
+/aibrigade spawn group SquadMembers 10 100 64 100
+/aibrigade givearmor SquadCaptain netherite
+/aibrigade givearmor SquadMembers iron
+/aibrigade assignleader SquadMembers SquadCaptain
+/aibrigade setbehavior SquadMembers follow
+/aibrigade setradius SquadMembers 12
+
+# Scénario 3: Patrouille automatique
+/aibrigade spawn group Patrol 8 -50 70 -50
+/aibrigade givearmor Patrol mixed
+/aibrigade setbehavior Patrol patrol
+
+# Scénario 4: Combat entre groupes
+/aibrigade spawn group AttackForce 15 -100 64 0
+/aibrigade spawn group DefenseForce 15 100 64 0
+/aibrigade givearmor AttackForce diamond
+/aibrigade givearmor DefenseForce netherite
+/aibrigade hostile AttackForce true
+/aibrigade hostile DefenseForce true
+
+# ============================================
+# AIDE ET DOCUMENTATION
+# ============================================
+
+# Afficher l'aide
+/aibrigade help
+
+# ============================================
+# NOTES
+# ============================================
+
+# - Remplacer les noms de bots/groupes selon vos besoins
+# - Les coordonnées x y z peuvent être ajustées
+# - Les tests de performance (100-300 bots) peuvent causer du lag
+# - Utilisez /aibrigade listbots et /aibrigade listgroups pour suivre vos bots
+# - Le mode debug est utile pour visualiser les comportements
+# - N'oubliez pas de nettoyer avec removebot/removegroup après les tests
+
+# ============================================
+# VÉRIFICATION RAPIDE APRÈS BUILD
+# ============================================
+
+# Séquence de test rapide (5 minutes)
+/aibrigade spawn solo QuickTest
+/aibrigade givearmor QuickTest diamond
+/aibrigade spawn group QuickGroup 5
+/aibrigade assignleader QuickGroup QuickTest
+/aibrigade setbehavior QuickGroup follow
+/aibrigade debug enable
+/aibrigade debug paths true
+/aibrigade groupinfo QuickGroup
+/aibrigade listbots
+/aibrigade removegroup QuickGroup
+/aibrigade removebot QuickTest
+/aibrigade debug disable
+
+# Si tous ces tests fonctionnent, le mod est opérationnel!

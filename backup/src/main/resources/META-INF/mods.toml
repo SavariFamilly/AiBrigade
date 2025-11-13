@@ -1,0 +1,69 @@
+modLoader="javafml"
+loaderVersion="[47,)"
+license="MIT"
+
+[[mods]]
+modId="aibrigade"
+version="1.0.0"
+displayName="AIBrigade"
+description='''
+AIBrigade allows you to spawn and control up to 300+ bot NPCs that behave like real players.
+Bots can follow leaders, attack targets, patrol areas, climb obstacles, and execute complex AI behaviors.
+Perfect for testing, demonstrations, or creating NPC armies!
+'''
+logoFile="logo.png"
+credits="Created with Claude Code"
+authors="AIBrigade Team"
+displayURL="https://github.com/yourusername/aibrigade"
+
+[[dependencies.aibrigade]]
+modId="forge"
+mandatory=true
+versionRange="[47,)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.aibrigade]]
+modId="minecraft"
+mandatory=true
+versionRange="[1.20.1,1.21)"
+ordering="NONE"
+side="BOTH"
+
+# Optional dependencies - Animation & AI
+[[dependencies.aibrigade]]
+modId="geckolib"
+mandatory=false
+versionRange="[4.4,)"
+ordering="AFTER"
+side="BOTH"
+
+[[dependencies.aibrigade]]
+modId="smartbrainlib"
+mandatory=false
+versionRange="[1.0,)"
+ordering="AFTER"
+side="BOTH"
+
+[[dependencies.aibrigade]]
+modId="citadel"
+mandatory=false
+versionRange="[2.6,)"
+ordering="AFTER"
+side="BOTH"
+
+# Optional dependencies - NPC & Utilities
+[[dependencies.aibrigade]]
+modId="easy_npc"
+mandatory=false
+versionRange="[5.0,)"
+ordering="AFTER"
+side="BOTH"
+
+# LibX temporarily disabled - incompatible with Forge 1.21.1
+# [[dependencies.aibrigade]]
+# modId="libx"
+# mandatory=false
+# versionRange="[1.20.1-5.0,)"
+# ordering="AFTER"
+# side="BOTH"

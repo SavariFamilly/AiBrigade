@@ -73,6 +73,16 @@ public class BotCommandHandler {
                     .then(Commands.argument("targetGroup", StringArgumentType.string())
                         .executes(BotCommandHandler::setHostile))))
 
+            .then(Commands.literal("sethostiletogroup")
+                .then(Commands.argument("groupName", StringArgumentType.string())
+                    .executes(BotCommandHandler::setPlayerHostileToGroup)))
+
+            .then(Commands.literal("followleader")
+                .then(Commands.argument("groupName", StringArgumentType.string())
+                    .then(Commands.argument("enabled", BoolArgumentType.bool())
+                        .then(Commands.argument("radius", FloatArgumentType.floatArg(1.0f, 100.0f))
+                            .executes(BotCommandHandler::setFollowLeader)))))
+
             .then(Commands.literal("givearmor")
                 .then(Commands.argument("target", StringArgumentType.string())
                     .then(Commands.argument("type", StringArgumentType.string())
@@ -105,8 +115,12 @@ public class BotCommandHandler {
                 .then(Commands.argument("groupName", StringArgumentType.string())
                     .executes(BotCommandHandler::groupInfo)))
 
+
             .then(Commands.literal("listbots")
                 .executes(BotCommandHandler::listBots))
+
+            .then(Commands.literal("cleanupbots")
+                .executes(BotCommandHandler::cleanupBots))
 
             .then(Commands.literal("listgroups")
                 .executes(BotCommandHandler::listGroups))
@@ -124,7 +138,7 @@ public class BotCommandHandler {
      */
     private static int spawnSoloBot(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
-        ServerLevel level = player.serverLevel();
+        ServerLevel level = (ServerLevel) player.level();
         BlockPos pos = player.blockPosition();
 
         String leader = StringArgumentType.getString(context, "leader");
@@ -158,7 +172,7 @@ public class BotCommandHandler {
      */
     private static int spawnBotGroup(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
-        ServerLevel level = player.serverLevel();
+        ServerLevel level = (ServerLevel) player.level();
         BlockPos pos = player.blockPosition();
 
         int count = IntegerArgumentType.getInteger(context, "count");
@@ -231,6 +245,68 @@ public class BotCommandHandler {
             true);
 
         return 1;
+    }
+
+    /**
+     * Command: /aibrigade sethostiletogroup
+     * Makes the executing player hostile to a group
+     */
+    private static int setPlayerHostileToGroup(CommandContext<CommandSourceStack> context) {
+        String groupName = StringArgumentType.getString(context, "groupName");
+
+        BotManager botManager = AIBrigadeMod.getBotManager();
+        if (botManager == null) {
+            context.getSource().sendFailure(Component.literal("Bot manager not initialized"));
+            return 0;
+        }
+
+        try {
+            ServerPlayer player = context.getSource().getPlayerOrException();
+            botManager.setPlayerGroupRelationship(player.getUUID(), groupName,
+                com.aibrigade.bots.TeamRelationship.HOSTILE);
+
+            context.getSource().sendSuccess(() ->
+                Component.literal("You are now hostile towards group '" + groupName + "'"),
+                true);
+
+            return 1;
+        } catch (CommandSyntaxException e) {
+            context.getSource().sendFailure(Component.literal("This command must be executed by a player"));
+            return 0;
+        }
+    }
+
+    /**
+     * Command: /aibrigade followleader <groupName> <true/false> <radius>
+     * Enables/disables follow leader mode for a group with specified radius
+     * Selon le cahier des charges:
+     * - 5/6 des bots suivent dans le radius défini
+     * - 1/6 des bots suivent activement le leader
+     */
+    private static int setFollowLeader(CommandContext<CommandSourceStack> context) {
+        String groupName = StringArgumentType.getString(context, "groupName");
+        boolean enabled = BoolArgumentType.getBool(context, "enabled");
+        float radius = FloatArgumentType.getFloat(context, "radius");
+
+        BotManager botManager = AIBrigadeMod.getBotManager();
+        if (botManager == null) {
+            context.getSource().sendFailure(Component.literal("Bot manager not initialized"));
+            return 0;
+        }
+
+        boolean success = botManager.setFollowLeader(groupName, enabled, radius);
+
+        if (success) {
+            context.getSource().sendSuccess(() ->
+                Component.literal("Follow leader mode " + (enabled ? "enabled" : "disabled") +
+                    " for group '" + groupName + "' with radius " + radius +
+                    "\n§7(5/6 bots follow in radius, 1/6 follow actively)"),
+                true);
+            return 1;
+        } else {
+            context.getSource().sendFailure(Component.literal("Failed to set follow leader - group not found"));
+            return 0;
+        }
     }
 
     /**
@@ -414,11 +490,35 @@ public class BotCommandHandler {
             return 0;
         }
 
-        int count = botManager.getActiveBots().size();
+        int count = botManager.getBotCount();
+        int max = botManager.getMaxBots();
 
         context.getSource().sendSuccess(() ->
-            Component.literal("Active bots: " + count + " / 300"),
+            Component.literal("Active bots: " + count + " / " + max),
             false);
+
+        return 1;
+    }
+
+    /**
+     * Command: /aibrigade cleanupbots
+     * Manually triggers cleanup of dead bots
+     */
+    private static int cleanupBots(CommandContext<CommandSourceStack> context) {
+        BotManager botManager = AIBrigadeMod.getBotManager();
+        if (botManager == null) {
+            context.getSource().sendFailure(Component.literal("Bot manager not initialized"));
+            return 0;
+        }
+
+        int beforeCount = botManager.getBotCount();
+        botManager.cleanupDeadBots();
+        int afterCount = botManager.getBotCount();
+        int cleaned = beforeCount - afterCount;
+
+        context.getSource().sendSuccess(() ->
+            Component.literal("Cleaned up " + cleaned + " dead bots. Active bots: " + afterCount + " / " + botManager.getMaxBots()),
+            true);
 
         return 1;
     }
@@ -467,6 +567,8 @@ public class BotCommandHandler {
             /aibrigade spawn solo <leader> <behavior> <radius> <static> <groupName>
             /aibrigade spawn group <count> <leader> <behavior> <radius> <static> <groupName>
             /aibrigade assignleader <groupName> <leaderName>
+            /aibrigade followleader <groupName> <true/false> <radius>
+              -> 5/6 bots follow in radius, 1/6 follow actively
             /aibrigade hostile <sourceGroup> <targetGroup>
             /aibrigade givearmor <target> <full|partial> <materials>
             /aibrigade setbehavior <target> <behavior>
@@ -475,11 +577,16 @@ public class BotCommandHandler {
             /aibrigade removebot <botName>
             /aibrigade removegroup <groupName>
             /aibrigade groupinfo <groupName>
-            /aibrigade listbots
+            /aibrigade listbots - Show active bot count
+            /aibrigade cleanupbots - Manually remove dead bots
             /aibrigade listgroups
 
             Behaviors: follow, patrol, raid, guard
             Armor materials: diamond, iron, chainmail, leather, gold, netherite
+            Equipment: Weighted distribution (20% nothing, 15% iron pickaxe, 10% diamond pickaxe,
+                       20% cooked beef, 20% iron sword, 15% diamond sword)
+
+            Note: Dead bots are automatically cleaned every 5 seconds
             """;
 
         context.getSource().sendSuccess(() ->
@@ -488,4 +595,5 @@ public class BotCommandHandler {
 
         return 1;
     }
+
 }

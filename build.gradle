@@ -1,7 +1,7 @@
 plugins {
     id 'eclipse'
     id 'maven-publish'
-    id 'net.minecraftforge.gradle' version '[6.0,6.2)'
+    id 'net.minecraftforge.gradle' version '6.0.29'
 }
 
 version = '1.0.0'
@@ -81,39 +81,58 @@ repositories {
             includeGroup "curse.maven"
         }
     }
+    maven {
+        // Modrinth Maven
+        name = "Modrinth"
+        url = "https://api.modrinth.com/maven"
+    }
 }
 
 dependencies {
-    minecraft 'net.minecraftforge:forge:1.21.1-52.0.29'
+    minecraft 'net.minecraftforge:forge:1.20.1-47.3.0'
 
     // === CORE AI LIBRARIES ===
 
     // SmartBrainLib - Advanced AI behaviors
-    // Version 1.17 for Minecraft 1.21.1 - Provides behavior trees and advanced AI
-    implementation fg.deobf("curse.maven:smartbrainlib-661293:5932366")
+    // Version 1.15 for Minecraft 1.20.1 Forge (File ID: 5654964)
+    implementation fg.deobf("curse.maven:smartbrainlib-661293:5654964")
 
     // === ANIMATION LIBRARIES ===
 
     // GeckoLib - Animations library for bot animations
-    // Version 4.7.1 for Minecraft 1.21.1
-    // Note: May have mixin issues in dev, but required for animations
-    implementation fg.deobf('software.bernie.geckolib:geckolib-forge-1.21.1:4.7.1')
+    // TEMPORARILY DISABLED - Dependency resolution issues
+    // Will need to be added manually or via different method
+    // implementation fg.deobf('software.bernie.geckolib:geckolib-forge-1.21:4.5.8')
 
     // Citadel - Entity framework and utilities
-    // Version 2.6.7 for Minecraft 1.21.1
-    // Note: May have mixin issues in dev, but provides entity helpers
-    implementation fg.deobf("curse.maven:citadel-331936:6024009")
+    // Version 2.6.1 for Minecraft 1.20.1 - DISABLED due to mixin incompatibility
+    // The LivingEntityMixin in Citadel targets methods that don't exist in 1.20.1
+    // Our mod works without Citadel for now - can be added later if needed
+    // implementation fg.deobf("curse.maven:citadel-331936:6002521")
 
     // === NPC & ENTITY LIBRARIES ===
 
     // Easy NPC - Custom NPCs with skins, inventory, weapons
-    // Version 5.9.0 for Minecraft 1.21.1 Forge
-    implementation fg.deobf("curse.maven:easy-npc-559312:5947970")
+    // Version 5.5.9 for Minecraft 1.20.1 Forge (File ID: 5689125)
+    // Note: Version 5.9.2 is only available on Modrinth, using closest CurseForge version
+    implementation fg.deobf("curse.maven:easy-npc-559312:5689125")
 
     // LibX - Utility library for mod development
-    // Version 1.21.1-5.1.7 for Minecraft 1.21.1
-    implementation fg.deobf("curse.maven:libx-412525:5943888")
+    // Version 1.20.1-5.0.12 for Minecraft 1.20.1 (compatible with 1.21.1)
+    implementation fg.deobf("curse.maven:libx-412525:4947474")
 
+    // === INTEGRATION MODS (Install separately - not dependencies) ===
+    // These mods should be installed by the user in their mods folder:
+    //
+    // AIOT Bot Mod - For advanced bot physical actions (mining, building)
+    //   - Download from CurseForge for 1.20.1
+    //   - Provides API for bots to interact with blocks
+    //
+    // CC: Tweaked - For programmable turtle automation
+    //   - Download from CurseForge for 1.20.1
+    //   - Allows Lua scripting for complex bot behaviors
+    //   - Our mod can send commands to CC:Tweaked turtles
+    //
     // === NOT AVAILABLE FOR 1.20.1 ===
     // - Controllable (controller support - not needed for bot AI)
     // - LLibrary / AnimationAPI (only supports up to 1.12.2)
@@ -124,11 +143,11 @@ dependencies {
 
 tasks.named('processResources', ProcessResources).configure {
     var replaceProperties = [
-        minecraft_version   : '1.21.1',
-        minecraft_version_range: '[1.21.1,1.22)',
-        forge_version       : '52.0.29',
-        forge_version_range : '[52,)',
-        loader_version_range: '[52,)',
+        minecraft_version   : '1.20.1',
+        minecraft_version_range: '[1.20.1,1.21)',
+        forge_version       : '47.3.0',
+        forge_version_range : '[47,)',
+        loader_version_range: '[47,)',
         mod_id              : 'aibrigade',
         mod_name            : 'AIBrigade',
         mod_version         : version,

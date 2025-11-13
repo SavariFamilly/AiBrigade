@@ -39,14 +39,14 @@ public class BotManager {
     // Storage for bot groups (GroupName -> Set of Bot UUIDs)
     private final Map<String, BotGroup> botGroups = new ConcurrentHashMap<>();
 
-    // Hostility relationships (GroupName -> Set of hostile group names)
-    private final Map<String, Set<String>> hostileGroups = new ConcurrentHashMap<>();
+    // Team relationships (GroupName -> Map<OtherGroupName, Relationship>)
+    private final Map<String, Map<String, TeamRelationship>> teamRelationships = new ConcurrentHashMap<>();
+
+    // Player relationships with groups (PlayerUUID -> Map<GroupName, Relationship>)
+    private final Map<UUID, Map<String, TeamRelationship>> playerRelationships = new ConcurrentHashMap<>();
 
     // Gson for JSON serialization
     private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
-
-    // Bot name generator
-    private final BotNameGenerator nameGenerator = new BotNameGenerator();
 
     // Maximum bots allowed
     private static final int MAX_BOTS = 300;
@@ -79,15 +79,17 @@ public class BotManager {
         }
 
         // Create bot entity using registered entity type
+        // Le constructeur de BotEntity applique automatiquement:
+        // - MojangSkinFetcher.applyRandomFamousSkin(this)
+        // - RandomEquipment.equipRandomItem(this)
         BotEntity bot = new BotEntity(ModEntities.BOT.get(), level);
 
         AIBrigadeMod.LOGGER.info("Spawning bot at {} in group {} with behavior {}",
             pos, groupName, behavior);
 
-        // Configure bot
+        // Configure bot (NE PAS écraser le nom et skin déjà appliqués dans le constructeur)
         bot.setPos(pos.getX(), pos.getY(), pos.getZ());
-        bot.setBotName(nameGenerator.generateUniqueName());
-        bot.setBotSkin(selectRandomSkin());
+        // bot.setBotName() et bot.setBotSkin() sont déjà définis par le constructeur via MojangSkinFetcher
         bot.setBehaviorType(behavior);
         bot.setFollowRadius(radius);
         bot.setStatic(isStatic);
@@ -99,6 +101,9 @@ public class BotManager {
         if (leaderId != null) {
             bot.setLeaderId(leaderId);
         }
+
+        // L'équipement est déjà appliqué dans le constructeur via RandomEquipment.equipRandomItem()
+        // Ne pas appeler giveStartingEquipment() qui écrase l'équipement
 
         // Add to world
         level.addFreshEntity(bot);
@@ -158,7 +163,7 @@ public class BotManager {
     }
 
     /**
-     * Remove a bot by UUID
+     * Remove a bot by UUID (command-triggered removal)
      *
      * @param botId The bot's UUID
      * @return true if removed successfully
@@ -166,20 +171,51 @@ public class BotManager {
     public boolean removeBot(UUID botId) {
         BotEntity bot = activeBots.get(botId);
         if (bot != null) {
-            // Remove from group
-            String groupName = bot.getBotGroup();
-            removeBotFromGroup(groupName, botId);
-
-            // Remove from world
+            // Remove from world (this will trigger onBotRemoved via BotEntity.remove())
             bot.remove(net.minecraft.world.entity.Entity.RemovalReason.DISCARDED);
-
-            // Remove from active bots
-            activeBots.remove(botId);
-
-            AIBrigadeMod.LOGGER.info("Bot {} removed", bot.getBotName());
             return true;
         }
         return false;
+    }
+
+    /**
+     * Internal cleanup method - called when a bot dies or is removed
+     * Centralizes all cleanup logic to avoid duplication
+     *
+     * @param bot The bot to cleanup
+     * @param reason Reason for cleanup (for logging)
+     */
+    private void cleanupBot(BotEntity bot, String reason) {
+        if (bot == null) return;
+
+        UUID botId = bot.getUUID();
+
+        // Check if already cleaned (avoid double cleanup)
+        if (!activeBots.containsKey(botId)) {
+            return;
+        }
+
+        String groupName = bot.getBotGroup();
+        String botName = bot.getBotName();
+
+        // Remove from group
+        removeBotFromGroup(groupName, botId);
+
+        // Remove from active bots
+        activeBots.remove(botId);
+
+        AIBrigadeMod.LOGGER.info("Bot {} {} (remaining: {}/{})",
+            botName, reason, activeBots.size(), MAX_BOTS);
+    }
+
+    /**
+     * Called when a bot is removed from the world
+     * This is called automatically by BotEntity.remove()
+     *
+     * @param bot The bot being removed
+     */
+    public void onBotRemoved(BotEntity bot) {
+        cleanupBot(bot, "removed from world");
     }
 
     /**
@@ -204,7 +240,7 @@ public class BotManager {
         }
 
         botGroups.remove(groupName);
-        hostileGroups.remove(groupName);
+        teamRelationships.remove(groupName);
 
         AIBrigadeMod.LOGGER.info("Removed group {} ({} bots)", groupName, removed);
         return removed;
@@ -241,14 +277,54 @@ public class BotManager {
     }
 
     /**
-     * Make one group hostile towards another
+     * Set the relationship between two groups (bidirectional)
+     *
+     * @param group1 First group
+     * @param group2 Second group
+     * @param relationship The relationship type (ALLIED, NEUTRAL, HOSTILE)
+     */
+    public void setTeamRelationship(String group1, String group2, TeamRelationship relationship) {
+        // Set bidirectional relationship
+        teamRelationships.computeIfAbsent(group1, k -> new ConcurrentHashMap<>()).put(group2, relationship);
+        teamRelationships.computeIfAbsent(group2, k -> new ConcurrentHashMap<>()).put(group1, relationship);
+
+        AIBrigadeMod.LOGGER.info("Set relationship between {} and {} to {}", group1, group2, relationship);
+
+        // Update bot hostile states if needed
+        updateBotsHostileState(group1);
+        updateBotsHostileState(group2);
+    }
+
+    /**
+     * Get the relationship between two groups
+     *
+     * @param group1 First group
+     * @param group2 Second group
+     * @return The relationship, or NEUTRAL if not set
+     */
+    public TeamRelationship getTeamRelationship(String group1, String group2) {
+        // Same group = always allied
+        if (group1.equals(group2)) {
+            return TeamRelationship.ALLIED;
+        }
+
+        Map<String, TeamRelationship> relationships = teamRelationships.get(group1);
+        if (relationships != null && relationships.containsKey(group2)) {
+            return relationships.get(group2);
+        }
+
+        // Default to neutral if no relationship set
+        return TeamRelationship.NEUTRAL;
+    }
+
+    /**
+     * Make one group hostile towards another (convenience method)
      *
      * @param sourceGroup The group becoming hostile
      * @param targetGroup The target group
      */
     public void setGroupHostile(String sourceGroup, String targetGroup) {
-        hostileGroups.computeIfAbsent(sourceGroup, k -> new HashSet<>()).add(targetGroup);
-        AIBrigadeMod.LOGGER.info("Group {} is now hostile towards {}", sourceGroup, targetGroup);
+        setTeamRelationship(sourceGroup, targetGroup, TeamRelationship.HOSTILE);
     }
 
     /**
@@ -259,8 +335,152 @@ public class BotManager {
      * @return true if hostile
      */
     public boolean areGroupsHostile(String group1, String group2) {
-        Set<String> hostiles = hostileGroups.get(group1);
-        return hostiles != null && hostiles.contains(group2);
+        return getTeamRelationship(group1, group2) == TeamRelationship.HOSTILE;
+    }
+
+    /**
+     * Update hostile state for all bots in a group based on relationships
+     */
+    private void updateBotsHostileState(String groupName) {
+        BotGroup group = botGroups.get(groupName);
+        if (group == null) return;
+
+        // Check if this group has any hostile relationships (with groups or players)
+        boolean hasHostileRelationships = false;
+
+        // Check group-to-group relationships
+        Map<String, TeamRelationship> relationships = teamRelationships.get(groupName);
+        if (relationships != null) {
+            for (TeamRelationship rel : relationships.values()) {
+                if (rel == TeamRelationship.HOSTILE) {
+                    hasHostileRelationships = true;
+                    break;
+                }
+            }
+        }
+
+        // Check player-to-group relationships
+        if (!hasHostileRelationships) {
+            for (Map<String, TeamRelationship> playerRels : playerRelationships.values()) {
+                if (playerRels.containsKey(groupName) && playerRels.get(groupName) == TeamRelationship.HOSTILE) {
+                    hasHostileRelationships = true;
+                    break;
+                }
+            }
+        }
+
+        // Set hostile state for all bots in the group
+        for (UUID botId : group.getBotIds()) {
+            BotEntity bot = activeBots.get(botId);
+            if (bot != null) {
+                bot.setHostile(hasHostileRelationships);
+            }
+        }
+    }
+
+    /**
+     * Set the relationship between a player and a group
+     *
+     * @param playerId Player UUID
+     * @param groupName Group name
+     * @param relationship The relationship type
+     */
+    public void setPlayerGroupRelationship(UUID playerId, String groupName, TeamRelationship relationship) {
+        playerRelationships.computeIfAbsent(playerId, k -> new ConcurrentHashMap<>()).put(groupName, relationship);
+        AIBrigadeMod.LOGGER.info("Set relationship between player {} and group {} to {}",
+            playerId, groupName, relationship);
+
+        // Update hostile state for the group
+        updateBotsHostileState(groupName);
+    }
+
+    /**
+     * Get the relationship between a player and a group
+     *
+     * @param playerId Player UUID
+     * @param groupName Group name
+     * @return The relationship, or NEUTRAL if not set
+     */
+    public TeamRelationship getPlayerGroupRelationship(UUID playerId, String groupName) {
+        Map<String, TeamRelationship> relationships = playerRelationships.get(playerId);
+        if (relationships != null && relationships.containsKey(groupName)) {
+            return relationships.get(groupName);
+        }
+        return TeamRelationship.NEUTRAL;
+    }
+
+    /**
+     * Enable/disable follow leader mode for a group with specified radius
+     * Selon le cahier des charges:
+     * - 5/6 des bots suivent dans le radius défini
+     * - 1/6 des bots suivent activement le leader
+     * Les probabilités sont assignées automatiquement lors de la création du Goal
+     *
+     * @param groupName Group name
+     * @param enabled true to enable following, false to disable
+     * @param radius Follow radius for the group
+     * @return true if successful, false if group not found
+     */
+    public boolean setFollowLeader(String groupName, boolean enabled, float radius) {
+        // Check if target is a group
+        if (botGroups.containsKey(groupName)) {
+            BotGroup group = botGroups.get(groupName);
+            Set<UUID> groupBots = group.getBotIds();
+            if (groupBots.isEmpty()) {
+                return false;
+            }
+
+            // Update group radius
+            group.setFollowRadius(radius);
+
+            // Set follow leader for all bots in group
+            int count = 0;
+            int activeFollowers = 0;
+            int radiusFollowers = 0;
+
+            for (UUID botUUID : groupBots) {
+                BotEntity bot = activeBots.get(botUUID);
+                if (bot != null) {
+                    bot.setFollowingLeader(enabled);
+                    bot.setFollowRadius(radius);
+                    count++;
+
+                    // Les probabilités sont déjà assignées dans RealisticFollowLeaderGoal
+                    // On compte juste pour l'info
+                    if (enabled) {
+                        // Note: l'information exacte sur le type nécessiterait d'accéder au Goal
+                        // Pour l'instant on estime: 1/6 active, 5/6 radius-based
+                    }
+                }
+            }
+
+            // Estimation des ratios pour le log
+            activeFollowers = Math.round(count / 6.0f);
+            radiusFollowers = count - activeFollowers;
+
+            AIBrigadeMod.LOGGER.info("Set follow leader {} for {} bots in group '{}' with radius {} " +
+                "(estimated: ~{} active followers, ~{} radius-based followers)",
+                enabled ? "enabled" : "disabled", count, groupName, radius,
+                activeFollowers, radiusFollowers);
+            return count > 0;
+        }
+
+        AIBrigadeMod.LOGGER.warn("Group '{}' not found", groupName);
+        return false;
+    }
+
+    /**
+     * Legacy method for backward compatibility
+     * Enable/disable follow leader mode for a bot or group without radius parameter
+     *
+     * @param targetName Bot name or group name
+     * @param enabled true to enable following, false to disable
+     * @return true if successful, false if bot/group not found
+     */
+    @Deprecated
+    public boolean setFollowLeader(String targetName, boolean enabled) {
+        // Use default radius of 10.0f
+        return setFollowLeader(targetName, enabled, 10.0f);
     }
 
     /**
@@ -387,8 +607,57 @@ public class BotManager {
      * Create armor piece for specific slot and material
      */
     private ItemStack createArmorPiece(ArmorMaterial material, int slot) {
-        // TODO: Implement proper armor creation based on material and slot
-        // For now, return empty stub
+        // Slot: 0=helmet, 1=chestplate, 2=leggings, 3=boots
+        switch (material) {
+            case LEATHER:
+                switch (slot) {
+                    case 0: return new ItemStack(Items.LEATHER_HELMET);
+                    case 1: return new ItemStack(Items.LEATHER_CHESTPLATE);
+                    case 2: return new ItemStack(Items.LEATHER_LEGGINGS);
+                    case 3: return new ItemStack(Items.LEATHER_BOOTS);
+                }
+                break;
+            case CHAINMAIL:
+                switch (slot) {
+                    case 0: return new ItemStack(Items.CHAINMAIL_HELMET);
+                    case 1: return new ItemStack(Items.CHAINMAIL_CHESTPLATE);
+                    case 2: return new ItemStack(Items.CHAINMAIL_LEGGINGS);
+                    case 3: return new ItemStack(Items.CHAINMAIL_BOOTS);
+                }
+                break;
+            case IRON:
+                switch (slot) {
+                    case 0: return new ItemStack(Items.IRON_HELMET);
+                    case 1: return new ItemStack(Items.IRON_CHESTPLATE);
+                    case 2: return new ItemStack(Items.IRON_LEGGINGS);
+                    case 3: return new ItemStack(Items.IRON_BOOTS);
+                }
+                break;
+            case GOLD:
+                switch (slot) {
+                    case 0: return new ItemStack(Items.GOLDEN_HELMET);
+                    case 1: return new ItemStack(Items.GOLDEN_CHESTPLATE);
+                    case 2: return new ItemStack(Items.GOLDEN_LEGGINGS);
+                    case 3: return new ItemStack(Items.GOLDEN_BOOTS);
+                }
+                break;
+            case DIAMOND:
+                switch (slot) {
+                    case 0: return new ItemStack(Items.DIAMOND_HELMET);
+                    case 1: return new ItemStack(Items.DIAMOND_CHESTPLATE);
+                    case 2: return new ItemStack(Items.DIAMOND_LEGGINGS);
+                    case 3: return new ItemStack(Items.DIAMOND_BOOTS);
+                }
+                break;
+            case NETHERITE:
+                switch (slot) {
+                    case 0: return new ItemStack(Items.NETHERITE_HELMET);
+                    case 1: return new ItemStack(Items.NETHERITE_CHESTPLATE);
+                    case 2: return new ItemStack(Items.NETHERITE_LEGGINGS);
+                    case 3: return new ItemStack(Items.NETHERITE_BOOTS);
+                }
+                break;
+        }
         return ItemStack.EMPTY;
     }
 
@@ -431,7 +700,7 @@ public class BotManager {
     /**
      * Find bot by name
      */
-    private BotEntity findBotByName(String name) {
+    public BotEntity findBotByName(String name) {
         for (BotEntity bot : activeBots.values()) {
             if (bot.getBotName().equalsIgnoreCase(name)) {
                 return bot;
@@ -467,6 +736,34 @@ public class BotManager {
      *
      * @return The skin name
      */
+    /**
+     * Give starting equipment to a new bot
+     * - 128 oak planks in off-hand
+     * - Random sword (1/3 stone, 1/3 iron, 1/3 diamond) in main hand
+     */
+    private void giveStartingEquipment(BotEntity bot) {
+        Random random = new Random();
+
+        // Give 128 oak planks in off-hand
+        ItemStack planks = new ItemStack(Items.OAK_PLANKS, 128);
+        bot.setItemSlot(net.minecraft.world.entity.EquipmentSlot.OFFHAND, planks);
+
+        // Give random sword (1/3 each type)
+        ItemStack sword;
+        int swordType = random.nextInt(3);
+        if (swordType == 0) {
+            sword = new ItemStack(Items.STONE_SWORD);
+        } else if (swordType == 1) {
+            sword = new ItemStack(Items.IRON_SWORD);
+        } else {
+            sword = new ItemStack(Items.DIAMOND_SWORD);
+        }
+        bot.setItemSlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND, sword);
+
+        AIBrigadeMod.LOGGER.info("Gave starting equipment to {}: {} planks and {} sword",
+            bot.getBotName(), planks.getCount(), sword.getItem().toString());
+    }
+
     private String selectRandomSkin() {
         // Available skins (can be configured via config file)
         String[] availableSkins = {
@@ -529,6 +826,32 @@ public class BotManager {
         return new File(modDataDir, "bots.json");
     }
 
+    /**
+     * Clean up dead or invalid bots from the manager
+     * Called periodically (every 5 seconds) to ensure dead bots don't block new spawns
+     * This is a safety net in case onBotRemoved() wasn't called
+     */
+    public void cleanupDeadBots() {
+        List<BotEntity> toRemove = new ArrayList<>();
+
+        for (BotEntity bot : activeBots.values()) {
+            // Remove if bot is dead, removed, or invalid
+            if (bot == null || !bot.isAlive() || bot.isRemoved()) {
+                toRemove.add(bot);
+            }
+        }
+
+        if (!toRemove.isEmpty()) {
+            for (BotEntity bot : toRemove) {
+                // Use centralized cleanup method
+                cleanupBot(bot, "found dead during periodic cleanup");
+            }
+
+            AIBrigadeMod.LOGGER.info("Periodic cleanup: removed {} dead/invalid bots (remaining: {}/{})",
+                toRemove.size(), activeBots.size(), MAX_BOTS);
+        }
+    }
+
     // Getters
 
     public Map<UUID, BotEntity> getActiveBots() {
@@ -537,6 +860,20 @@ public class BotManager {
 
     public Map<String, BotGroup> getBotGroups() {
         return Collections.unmodifiableMap(botGroups);
+    }
+
+    /**
+     * Get current bot count (for checking against limit)
+     */
+    public int getBotCount() {
+        return activeBots.size();
+    }
+
+    /**
+     * Get maximum allowed bots
+     */
+    public int getMaxBots() {
+        return MAX_BOTS;
     }
 
     /**

@@ -1,46 +1,36 @@
 package com.aibrigade.client;
 
-import com.aibrigade.main.AIBrigadeMod;
 import com.aibrigade.bots.BotEntity;
+import net.minecraft.client.model.HumanoidModel;
+import net.minecraft.client.model.geom.ModelLayers;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
+import net.minecraft.client.renderer.entity.HumanoidMobRenderer;
+import net.minecraft.client.renderer.entity.layers.HumanoidArmorLayer;
 import net.minecraft.resources.ResourceLocation;
-import software.bernie.geckolib.renderer.GeoEntityRenderer;
 
 /**
- * BotRenderer - GeckoLib renderer for bot entities
+ * BotRenderer - Basic renderer for bot entities
  *
- * This renderer handles the visual representation of bot entities using GeckoLib.
- * It uses the BotModel for the 3D model and applies textures based on the bot's skin.
+ * Uses standard humanoid rendering with Steve player texture.
+ * Bots will appear as basic humanoid entities with armor support.
  */
-public class BotRenderer extends GeoEntityRenderer<BotEntity> {
+public class BotRenderer extends HumanoidMobRenderer<BotEntity, HumanoidModel<BotEntity>> {
 
-    /**
-     * Constructor for BotRenderer
-     *
-     * @param renderManager The entity renderer provider
-     */
-    public BotRenderer(EntityRendererProvider.Context renderManager) {
-        super(renderManager, new BotModel());
-        this.shadowRadius = 0.5F; // Shadow size under the bot
+    // Use Steve's default player texture from Minecraft
+    private static final ResourceLocation TEXTURE = new ResourceLocation("minecraft", "textures/entity/player/wide/steve.png");
+
+    public BotRenderer(EntityRendererProvider.Context context) {
+        super(context, new HumanoidModel<>(context.bakeLayer(ModelLayers.PLAYER)), 0.5F);
+        this.addLayer(new HumanoidArmorLayer<>(this,
+            new HumanoidModel<>(context.bakeLayer(ModelLayers.PLAYER_INNER_ARMOR)),
+            new HumanoidModel<>(context.bakeLayer(ModelLayers.PLAYER_OUTER_ARMOR)),
+            context.getModelManager()));
     }
 
-    /**
-     * Get the texture location for this bot
-     * Allows different bots to have different skins
-     *
-     * @param entity The bot entity
-     * @return The texture resource location
-     */
     @Override
     public ResourceLocation getTextureLocation(BotEntity entity) {
-        String skinName = entity.getBotSkin();
-
-        // If skin is "default" or null, use the default bot texture
-        if (skinName == null || skinName.isEmpty() || skinName.equals("default")) {
-            return new ResourceLocation(AIBrigadeMod.MODID, "textures/entity/bot_default.png");
-        }
-
-        // Otherwise, use the specified skin
-        return new ResourceLocation(AIBrigadeMod.MODID, "textures/entity/bot_" + skinName + ".png");
+        // Use default Steve texture for all bots
+        // Can be customized per-bot based on entity.getBotSkin() in the future
+        return TEXTURE;
     }
 }

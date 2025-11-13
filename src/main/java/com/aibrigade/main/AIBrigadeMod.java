@@ -1,12 +1,17 @@
 package com.aibrigade.main;
 
+import com.aibrigade.bots.BotEntity;
 import com.aibrigade.bots.BotManager;
 import com.aibrigade.ai.AIManager;
 import com.aibrigade.commands.BotCommandHandler;
+import com.aibrigade.commands.BotBuildingCommands;
+import com.aibrigade.commands.BotDebugCommands;
+import com.aibrigade.persistence.BotDatabase;
 import com.aibrigade.registry.ModEntities;
 import com.aibrigade.utils.ConfigManager;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.RegisterCommandsEvent;
+import net.minecraftforge.event.entity.EntityAttributeCreationEvent;
 import net.minecraftforge.event.server.ServerStartingEvent;
 import net.minecraftforge.event.server.ServerStoppingEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
@@ -60,10 +65,8 @@ public class AIBrigadeMod {
      * Registers event buses and initializes core systems
      */
     public AIBrigadeMod() {
-        LOGGER.info("Initializing AIBrigade mod version {}", VERSION);
-
-        // Get mod event bus for lifecycle events
         IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
+        LOGGER.info("Initializing AIBrigade mod version {}", VERSION);
 
         // Register entity types
         ModEntities.register(modEventBus);
@@ -71,10 +74,25 @@ public class AIBrigadeMod {
         // Register setup method
         modEventBus.addListener(this::setup);
 
+        // Register entity attributes
+        modEventBus.addListener(this::onEntityAttributeCreation);
+
         // Register this class for Forge events
         MinecraftForge.EVENT_BUS.register(this);
 
         LOGGER.info("AIBrigade event buses registered successfully");
+    }
+
+    /**
+     * Entity attribute creation event handler
+     * Registers attributes for custom entities
+     *
+     * @param event The entity attribute creation event
+     */
+    private void onEntityAttributeCreation(EntityAttributeCreationEvent event) {
+        LOGGER.info("Registering entity attributes for BotEntity");
+        event.put(ModEntities.BOT.get(), BotEntity.createAttributes().build());
+        LOGGER.info("BotEntity attributes registered successfully");
     }
 
     /**
@@ -100,6 +118,10 @@ public class AIBrigadeMod {
             aiManager = new AIManager(configManager.getAIThreadPoolSize());
             LOGGER.info("AI manager initialized with {} threads", configManager.getAIThreadPoolSize());
 
+            // Register AI manager for events
+            MinecraftForge.EVENT_BUS.register(aiManager);
+            LOGGER.info("AI manager registered to event bus");
+
             // Verify dependencies
             verifyDependencies();
 
@@ -116,6 +138,12 @@ public class AIBrigadeMod {
     @SubscribeEvent
     public void onServerStarting(ServerStartingEvent event) {
         LOGGER.info("Server starting - Loading AIBrigade data");
+
+        // Initialize BotDatabase
+        var worldPath = event.getServer().overworld().getLevel().getServer()
+            .getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT);
+        BotDatabase.initialize(worldPath);
+        LOGGER.info("BotDatabase initialized at: {}", worldPath);
 
         // Load persistent bot and group data
         botManager.loadPersistentData(event.getServer());
@@ -136,6 +164,10 @@ public class AIBrigadeMod {
     public void onServerStopping(ServerStoppingEvent event) {
         LOGGER.info("Server stopping - Saving AIBrigade data");
 
+        // Save BotDatabase
+        BotDatabase.saveDatabase();
+        LOGGER.info("BotDatabase saved");
+
         // Save bot and group data
         botManager.savePersistentData(event.getServer());
 
@@ -155,7 +187,9 @@ public class AIBrigadeMod {
     public void onRegisterCommands(RegisterCommandsEvent event) {
         LOGGER.info("Registering AIBrigade commands");
         BotCommandHandler.register(event.getDispatcher());
-        LOGGER.info("Commands registered successfully");
+        BotBuildingCommands.register(event.getDispatcher());
+        BotDebugCommands.register(event.getDispatcher());
+        LOGGER.info("Commands registered successfully (including /bot building and /bot test)");
     }
 
     /**

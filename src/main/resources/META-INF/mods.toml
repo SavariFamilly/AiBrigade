@@ -1,5 +1,5 @@
 modLoader="javafml"
-loaderVersion="[52,)"
+loaderVersion="[47,)"
 license="MIT"
 
 [[mods]]
@@ -19,14 +19,14 @@ displayURL="https://github.com/yourusername/aibrigade"
 [[dependencies.aibrigade]]
 modId="forge"
 mandatory=true
-versionRange="[52,)"
+versionRange="[47,)"
 ordering="NONE"
 side="BOTH"
 
 [[dependencies.aibrigade]]
 modId="minecraft"
 mandatory=true
-versionRange="[1.21.1,1.22)"
+versionRange="[1.20.1,1.21)"
 ordering="NONE"
 side="BOTH"
 
@@ -48,7 +48,7 @@ side="BOTH"
 [[dependencies.aibrigade]]
 modId="citadel"
 mandatory=false
-versionRange="[2.5,)"
+versionRange="[2.6,)"
 ordering="AFTER"
 side="BOTH"
 
@@ -60,9 +60,10 @@ versionRange="[5.0,)"
 ordering="AFTER"
 side="BOTH"
 
-[[dependencies.aibrigade]]
-modId="libx"
-mandatory=false
-versionRange="[1.21.1-5.0,)"
-ordering="AFTER"
-side="BOTH"
+# LibX temporarily disabled - incompatible with Forge 1.21.1
+# [[dependencies.aibrigade]]
+# modId="libx"
+# mandatory=false
+# versionRange="[1.20.1-5.0,)"
+# ordering="AFTER"
+# side="BOTH"

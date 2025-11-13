@@ -1,6 +1,6 @@
 # AIBrigade
 
-**AIBrigade** is a comprehensive Minecraft mod for Forge/NeoForge 1.20.8 that allows you to spawn and control up to 300+ bot NPCs with advanced AI behaviors. Bots can follow leaders, attack targets, patrol areas, climb obstacles, and execute complex group behaviors.
+**AIBrigade** is a comprehensive Minecraft mod for Forge/NeoForge 1.20.1 that allows you to spawn and control up to 300+ bot NPCs with advanced AI behaviors. Bots can follow leaders, attack targets, patrol areas, climb obstacles, and execute complex group behaviors.
 
 ## Features
 
@@ -28,7 +28,7 @@
 ## Installation
 
 ### Requirements
-- **Minecraft**: 1.20.8
+- **Minecraft**: 1.20.1
 - **Forge/NeoForge**: 47.3.0 or higher
 - **Java**: 17 or higher
 
@@ -47,7 +47,7 @@ These mods enhance AIBrigade with animations, advanced AI, and pathfinding:
 | [Baritone](https://github.com/cabaletta/baritone) | Latest | Advanced pathfinding (experimental) |
 
 ### Installation Steps
-1. Download and install Forge/NeoForge 1.20.8
+1. Download and install Forge/NeoForge 1.20.1 (version 47.3.0 or higher)
 2. Download AIBrigade mod JAR file
 3. Place the JAR in your `mods/` folder
 4. (Optional) Install recommended dependencies

@@ -966,7 +966,6 @@ public class BotManager {
     public void loadPersistentData(MinecraftServer server) {
         AIBrigadeMod.LOGGER.info("Loading AIBrigade persistent data");
 
-        // TODO: Implement JSON loading from server's world data folder
         File dataFile = getDataFile(server);
         if (!dataFile.exists()) {
             AIBrigadeMod.LOGGER.info("No persistent data found, starting fresh");
@@ -974,10 +973,103 @@ public class BotManager {
         }
 
         try (Reader reader = new FileReader(dataFile)) {
-            // TODO: Deserialize and restore bots and groups
-            AIBrigadeMod.LOGGER.info("Persistent data loaded successfully");
+            Gson gson = new GsonBuilder().setPrettyPrinting().create();
+            PersistentData data = gson.fromJson(reader, PersistentData.class);
+
+            if (data == null) {
+                AIBrigadeMod.LOGGER.warn("Persistent data file is empty or corrupted");
+                return;
+            }
+
+            // Load groups first
+            if (data.groups != null) {
+                for (Map.Entry<String, GroupData> entry : data.groups.entrySet()) {
+                    GroupData groupData = entry.getValue();
+                    BotGroup group = new BotGroup(
+                        entry.getKey(),
+                        groupData.leaderName,
+                        groupData.followRadius
+                    );
+                    botGroups.put(entry.getKey(), group);
+                }
+                AIBrigadeMod.LOGGER.info("Loaded {} bot groups", data.groups.size());
+            }
+
+            // Load bots
+            if (data.bots != null) {
+                int loadedCount = 0;
+                int failedCount = 0;
+
+                for (BotData botData : data.bots) {
+                    try {
+                        // Get the correct world level
+                        ServerLevel level = server.getLevel(botData.getWorldKey());
+                        if (level == null) {
+                            AIBrigadeMod.LOGGER.warn("World {} not found for bot {}, skipping",
+                                botData.world, botData.name);
+                            failedCount++;
+                            continue;
+                        }
+
+                        BlockPos pos = new BlockPos(botData.x, botData.y, botData.z);
+
+                        // Spawn the bot
+                        BotEntity bot = spawnBot(
+                            level,
+                            pos,
+                            botData.leaderName,
+                            botData.behavior,
+                            botData.radius,
+                            botData.isStatic,
+                            botData.group
+                        );
+
+                        if (bot != null) {
+                            // Restore additional properties
+                            bot.setBotName(botData.name);
+                            bot.setHostile(botData.isHostile);
+                            bot.setFollowingLeader(botData.isFollowingLeader);
+                            bot.setCanPlaceBlocks(botData.canPlaceBlocks);
+                            bot.setForcedJumping(botData.forcedJumping);
+
+                            // Restore player UUID for skin
+                            if (botData.playerUUID != null) {
+                                try {
+                                    UUID playerUUID = UUID.fromString(botData.playerUUID);
+                                    bot.setPlayerUUID(playerUUID);
+                                } catch (IllegalArgumentException e) {
+                                    AIBrigadeMod.LOGGER.warn("Invalid player UUID for bot {}", botData.name);
+                                }
+                            }
+
+                            // Restore leader UUID
+                            if (botData.leaderId != null) {
+                                try {
+                                    UUID leaderUUID = UUID.fromString(botData.leaderId);
+                                    bot.setLeaderId(leaderUUID);
+                                } catch (IllegalArgumentException e) {
+                                    AIBrigadeMod.LOGGER.warn("Invalid leader UUID for bot {}", botData.name);
+                                }
+                            }
+
+                            loadedCount++;
+                        } else {
+                            failedCount++;
+                        }
+                    } catch (Exception e) {
+                        AIBrigadeMod.LOGGER.error("Failed to load bot {}: {}",
+                            botData.name, e.getMessage());
+                        failedCount++;
+                    }
+                }
+
+                AIBrigadeMod.LOGGER.info("Persistent data loaded: {} bots restored, {} failed",
+                    loadedCount, failedCount);
+            }
         } catch (IOException e) {
             AIBrigadeMod.LOGGER.error("Failed to load persistent data", e);
+        } catch (Exception e) {
+            AIBrigadeMod.LOGGER.error("Error parsing persistent data", e);
         }
     }
 
@@ -989,12 +1081,91 @@ public class BotManager {
 
         File dataFile = getDataFile(server);
 
-        try (Writer writer = new FileWriter(dataFile)) {
-            // TODO: Serialize bots and groups to JSON
-            AIBrigadeMod.LOGGER.info("Persistent data saved successfully");
+        try {
+            // Ensure directory exists
+            dataFile.getParentFile().mkdirs();
+
+            // Create persistent data structure
+            PersistentData data = new PersistentData();
+            data.bots = new ArrayList<>();
+            data.groups = new HashMap<>();
+
+            // Save all active bots
+            for (BotEntity bot : activeBots.values()) {
+                if (bot != null && bot.isAlive() && !bot.isRemoved()) {
+                    BotData botData = new BotData();
+                    botData.uuid = bot.getUUID().toString();
+                    botData.name = bot.getBotName();
+                    botData.x = (int)bot.getX();
+                    botData.y = (int)bot.getY();
+                    botData.z = (int)bot.getZ();
+                    botData.world = bot.level().dimension().location().toString();
+                    botData.group = bot.getBotGroup();
+                    botData.behavior = bot.getBehaviorType();
+                    botData.radius = bot.getFollowRadius();
+                    botData.isStatic = bot.isStatic();
+                    botData.isHostile = bot.isHostile();
+                    botData.isFollowingLeader = bot.isFollowingLeader();
+                    botData.canPlaceBlocks = bot.canPlaceBlocks();
+                    botData.forcedJumping = bot.isForcedJumping();
+
+                    // Save player UUID for skin
+                    UUID playerUUID = bot.getPlayerUUID();
+                    if (playerUUID != null) {
+                        botData.playerUUID = playerUUID.toString();
+                    }
+
+                    // Save leader UUID
+                    UUID leaderUUID = bot.getLeaderId();
+                    if (leaderUUID != null) {
+                        botData.leaderId = leaderUUID.toString();
+                        // Also save leader name for easier loading
+                        botData.leaderName = findLeaderName(server, leaderUUID);
+                    }
+
+                    data.bots.add(botData);
+                }
+            }
+
+            // Save all groups
+            for (Map.Entry<String, BotGroup> entry : botGroups.entrySet()) {
+                BotGroup group = entry.getValue();
+                GroupData groupData = new GroupData();
+                groupData.leaderName = group.getLeaderName();
+                groupData.followRadius = group.getFollowRadius();
+                data.groups.put(entry.getKey(), groupData);
+            }
+
+            // Write to file
+            try (Writer writer = new FileWriter(dataFile)) {
+                Gson gson = new GsonBuilder().setPrettyPrinting().create();
+                gson.toJson(data, writer);
+            }
+
+            AIBrigadeMod.LOGGER.info("Persistent data saved: {} bots, {} groups",
+                data.bots.size(), data.groups.size());
         } catch (IOException e) {
             AIBrigadeMod.LOGGER.error("Failed to save persistent data", e);
         }
+    }
+
+    /**
+     * Find leader name by UUID
+     */
+    private String findLeaderName(MinecraftServer server, UUID leaderUUID) {
+        // Check if leader is a player
+        var player = server.getPlayerList().getPlayer(leaderUUID);
+        if (player != null) {
+            return player.getName().getString();
+        }
+
+        // Check if leader is a bot
+        BotEntity leaderBot = activeBots.get(leaderUUID);
+        if (leaderBot != null) {
+            return leaderBot.getBotName();
+        }
+
+        return "unknown";
     }
 
     /**
@@ -1217,5 +1388,62 @@ public class BotManager {
             String suffix = suffixes[random.nextInt(suffixes.length)];
             return prefix + suffix + (counter++);
         }
+    }
+
+    /**
+     * Data class for persistent storage
+     */
+    private static class PersistentData {
+        List<BotData> bots;
+        Map<String, GroupData> groups;
+    }
+
+    /**
+     * Data class for bot storage
+     */
+    private static class BotData {
+        String uuid;
+        String name;
+        int x, y, z;
+        String world;
+        String group;
+        String behavior;
+        float radius;
+        boolean isStatic;
+        boolean isHostile;
+        boolean isFollowingLeader;
+        boolean canPlaceBlocks;
+        boolean forcedJumping;
+        String playerUUID;
+        String leaderId;
+        String leaderName;
+
+        /**
+         * Get world key from world string
+         */
+        net.minecraft.resources.ResourceKey<net.minecraft.world.level.Level> getWorldKey() {
+            if (world == null || world.isEmpty()) {
+                return net.minecraft.world.level.Level.OVERWORLD;
+            }
+
+            try {
+                net.minecraft.resources.ResourceLocation location =
+                    new net.minecraft.resources.ResourceLocation(world);
+                return net.minecraft.resources.ResourceKey.create(
+                    net.minecraft.core.registries.Registries.DIMENSION,
+                    location
+                );
+            } catch (Exception e) {
+                return net.minecraft.world.level.Level.OVERWORLD;
+            }
+        }
+    }
+
+    /**
+     * Data class for group storage
+     */
+    private static class GroupData {
+        String leaderName;
+        float followRadius;
     }
 }

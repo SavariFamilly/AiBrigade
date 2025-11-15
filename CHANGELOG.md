@@ -55,6 +55,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Hostility commands**
   - `/aibrigade sethostiletogroup <groupName>` - Player becomes hostile to group
   - Individual bot hostile response when attacked
+- **Bot persistence system** ⭐ Major Feature
+  - Bots and groups automatically saved on server shutdown
+  - Bots automatically restored on server startup
+  - Preserves all bot properties: position, behavior, equipment, skins, etc.
+  - Preserves group configurations and relationships
+  - Saves to `world/aibrigade/bots.json`
+  - Multi-dimension support (Overworld, Nether, End)
+  - Graceful error handling for corrupted data
+  - Automatic cleanup of invalid entries
 
 ### Fixed
 - **Critical:** Static bots now attack hostile mobs (commit 9ac729f)
@@ -174,7 +183,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Known Issues
 - **Animations not implemented** - All GeckoLib code is commented out waiting for dependencies
-- **Persistence not functional** - Save/load methods are stubs with TODO markers
 - **Patrol/Raid/Guard behaviors** - Not yet implemented as specific goals, use basic follow/idle
 - **Multithreading AI** - Thread pool exists but not actively used for AI processing
 - **Formation pathfinding** - Planned but not yet implemented
@@ -196,7 +204,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [ ] Implement Patrol AI goal
 - [ ] Implement Raid AI goal
 - [ ] Implement Guard AI goal
-- [ ] Functional persistence (save/load bots)
+- [x] Functional persistence (save/load bots) - ✅ COMPLETED
 - [ ] GeckoLib animations integration
 - [ ] Formation movement system
 - [ ] Waypoint editor

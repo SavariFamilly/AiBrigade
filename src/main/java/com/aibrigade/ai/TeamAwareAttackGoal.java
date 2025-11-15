@@ -18,34 +18,51 @@ public class TeamAwareAttackGoal<T extends LivingEntity> extends NearestAttackab
 
     /**
      * Create a team-aware attack goal for targeting Players
+     * Attacks based on group relationship, NOT bot.isHostile() flag
      */
     public static TeamAwareAttackGoal<Player> forPlayer(BotEntity bot) {
         return new TeamAwareAttackGoal<>(bot, Player.class, 10, true, false,
             (target) -> {
-                // Check if this specific player is hostile to the bot's group
+                // Only attack based on group relationships
                 if (target instanceof Player) {
                     Player player = (Player) target;
                     String botGroup = bot.getGroupId();
                     if (botGroup != null && !botGroup.isEmpty()) {
                         TeamRelationship relationship = AIBrigadeMod.getBotManager()
                             .getPlayerGroupRelationship(player.getUUID(), botGroup);
-                        // Attack if player is hostile to this bot's group
-                        if (relationship == TeamRelationship.HOSTILE) {
-                            return true;
-                        }
+                        // Attack ONLY if player is hostile to this bot's group
+                        return relationship == TeamRelationship.HOSTILE;
                     }
                 }
-                // Otherwise use standard hostile check
-                return bot.isHostile() && !isSameTeam(bot, target);
+                // No group or no relationship = don't attack
+                return false;
             });
     }
 
     /**
      * Create a team-aware attack goal for targeting other BotEntities
+     * Attacks based on group relationship, NOT bot.isHostile() flag
      */
     public static TeamAwareAttackGoal<BotEntity> forBot(BotEntity bot) {
         return new TeamAwareAttackGoal<>(bot, BotEntity.class, 10, true, false,
-            (target) -> bot.isHostile() && !isSameTeam(bot, target));
+            (target) -> {
+                // Only attack based on group relationships
+                if (target instanceof BotEntity) {
+                    BotEntity targetBot = (BotEntity) target;
+                    String botGroup = bot.getGroupId();
+                    String targetGroup = targetBot.getGroupId();
+
+                    if (botGroup != null && !botGroup.isEmpty() &&
+                        targetGroup != null && !targetGroup.isEmpty()) {
+                        TeamRelationship relationship = AIBrigadeMod.getBotManager()
+                            .getTeamRelationship(botGroup, targetGroup);
+                        // Attack ONLY if groups are hostile to each other
+                        return relationship == TeamRelationship.HOSTILE;
+                    }
+                }
+                // No group or no relationship = don't attack
+                return false;
+            });
     }
 
     /**
@@ -115,32 +132,57 @@ public class TeamAwareAttackGoal<T extends LivingEntity> extends NearestAttackab
     }
 
     /**
-     * Only target if hostile mode is enabled and not same team
+     * Only target based on group relationships (not bot.isHostile flag)
      */
     @Override
     public boolean canUse() {
-        // Only attack if hostile mode is enabled
-        if (!bot.isHostile()) {
+        // Don't attack if bot is static
+        if (bot.isStatic()) {
             return false;
         }
 
-        // Use parent logic with team filtering
+        // Use parent logic with team filtering via predicate
         return super.canUse();
     }
 
     /**
-     * Continue targeting only if still hostile and target is valid
+     * Continue targeting based on group relationships
      */
     @Override
     public boolean canContinueToUse() {
-        // Stop attacking if hostile mode is disabled
-        if (!bot.isHostile()) {
+        // Stop attacking if bot became static
+        if (bot.isStatic()) {
             return false;
         }
 
-        // Check if target became a teammate (group changed)
-        if (this.target != null && isSameTeam(bot, this.target)) {
-            return false;
+        // Stop if relationship changed (no longer hostile)
+        if (this.target != null) {
+            // Re-check relationship for players
+            if (this.target instanceof Player) {
+                Player player = (Player) this.target;
+                String botGroup = bot.getGroupId();
+                if (botGroup != null && !botGroup.isEmpty()) {
+                    TeamRelationship relationship = AIBrigadeMod.getBotManager()
+                        .getPlayerGroupRelationship(player.getUUID(), botGroup);
+                    if (relationship != TeamRelationship.HOSTILE) {
+                        return false;
+                    }
+                }
+            }
+            // Re-check relationship for bots
+            else if (this.target instanceof BotEntity) {
+                BotEntity targetBot = (BotEntity) this.target;
+                String botGroup = bot.getGroupId();
+                String targetGroup = targetBot.getGroupId();
+                if (botGroup != null && !botGroup.isEmpty() &&
+                    targetGroup != null && !targetGroup.isEmpty()) {
+                    TeamRelationship relationship = AIBrigadeMod.getBotManager()
+                        .getTeamRelationship(botGroup, targetGroup);
+                    if (relationship != TeamRelationship.HOSTILE) {
+                        return false;
+                    }
+                }
+            }
         }
 
         return super.canContinueToUse();

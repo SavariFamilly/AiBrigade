@@ -521,6 +521,8 @@ public class BotManager {
                     bot.setFollowRadius(radius);
                     count++;
 
+                    System.out.println("[BotManager] Bot " + bot.getBotName() + " setFollowingLeader=" + enabled + " radius=" + radius + " static=" + bot.isStatic() + " hasLeader=" + (bot.getLeaderId() != null));
+
                     // Les probabilités sont déjà assignées dans RealisticFollowLeaderGoal
                     // On compte juste pour l'info
                     if (enabled) {

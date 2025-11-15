@@ -95,9 +95,13 @@ public class RealisticFollowLeaderGoal extends Goal {
 
     @Override
     public boolean canUse() {
-        // Vérifier le mode statique et le follow
-        if (!EntityValidator.isBotAIReady(bot)) {
-            // Bot is static or not alive
+        // Bot must be alive
+        if (!bot.isAlive()) {
+            return false;
+        }
+
+        // Static bots CANNOT move to follow leader (they can only look)
+        if (bot.isStatic()) {
             return false;
         }
 

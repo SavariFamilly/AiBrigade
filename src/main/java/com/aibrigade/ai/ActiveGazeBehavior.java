@@ -116,11 +116,17 @@ public class ActiveGazeBehavior extends Goal {
 
         // Si pas de leader ou follow leader pas activé, regarder droit devant
         if (leaderId == null) {
+            if (bot.isFollowingLeader() && bot.tickCount % 200 == 0) {
+                System.out.println("[ActiveGaze] Bot " + bot.getBotName() + " (static=" + bot.isStatic() + ") has followleader enabled but NO leader UUID!");
+            }
             return;
         }
 
         // Si followleader est désactivé, ne pas regarder le leader
         if (!bot.isFollowingLeader()) {
+            if (bot.tickCount % 300 == 0) {
+                System.out.println("[ActiveGaze] Bot " + bot.getBotName() + " has leader but followleader is DISABLED");
+            }
             return;
         }
 
@@ -128,6 +134,13 @@ public class ActiveGazeBehavior extends Goal {
         if (leader != null) {
             // Regarder le leader avec un peu d'inertie
             BotLookHelper.lookAtEntity(bot, leader);
+            if (bot.tickCount % 100 == 0) {
+                System.out.println("[ActiveGaze] Bot " + bot.getBotName() + " (static=" + bot.isStatic() + ") looking at leader " + leader.getName().getString());
+            }
+        } else {
+            if (bot.tickCount % 200 == 0) {
+                System.out.println("[ActiveGaze] Bot " + bot.getBotName() + " cannot find leader with UUID " + leaderId);
+            }
         }
 
         // Timer pour décider de regarder ailleurs

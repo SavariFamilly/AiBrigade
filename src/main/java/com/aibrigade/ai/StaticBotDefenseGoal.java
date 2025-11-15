@@ -64,6 +64,13 @@ public class StaticBotDefenseGoal extends Goal {
             bot.getBoundingBox().inflate(detectionRange, 4.0, detectionRange)
         );
 
+        // Log for debugging (every 5 seconds)
+        if (target != null && bot.tickCount % 100 == 0) {
+            System.out.println("[StaticDefense] Bot " + bot.getBotName() + " detected hostile: " + target.getName().getString() + " at " + String.format("%.1f", bot.distanceTo(target)) + " blocks");
+        } else if (bot.tickCount % 200 == 0) {
+            System.out.println("[StaticDefense] Static bot " + bot.getBotName() + " scanning for threats... (none found in " + detectionRange + " block range)");
+        }
+
         // Can use if we found a target
         return target != null;
     }
@@ -89,6 +96,7 @@ public class StaticBotDefenseGoal extends Goal {
         // Set the target for the bot's AI
         bot.setTarget(target);
         attackCooldown = 0;
+        System.out.println("[StaticDefense] Bot " + bot.getBotName() + " STARTING attack on " + (target != null ? target.getName().getString() : "null"));
     }
 
     @Override
@@ -106,6 +114,9 @@ public class StaticBotDefenseGoal extends Goal {
         if (distance > attackRange) {
             // Move to target at normal speed
             bot.getNavigation().moveTo(target, 1.0);
+            if (bot.tickCount % 40 == 0) {
+                System.out.println("[StaticDefense] Bot " + bot.getBotName() + " moving to target at distance " + String.format("%.1f", distance));
+            }
         } else {
             // Stop moving when in attack range
             bot.getNavigation().stop();
@@ -114,6 +125,7 @@ public class StaticBotDefenseGoal extends Goal {
             if (attackCooldown <= 0) {
                 bot.doHurtTarget(target);
                 attackCooldown = ATTACK_COOLDOWN_TICKS;
+                System.out.println("[StaticDefense] Bot " + bot.getBotName() + " ATTACKING " + target.getName().getString());
             }
         }
 

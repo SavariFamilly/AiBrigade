@@ -57,6 +57,7 @@ public class BotPlayerSkinRenderer extends LivingEntityRenderer<BotEntity, Playe
         UUID playerUUID = bot.getPlayerUUID();
 
         if (playerUUID == null) {
+            System.out.println("[BotSkin] Bot " + bot.getBotName() + " has NO PlayerUUID - using default skin");
             return DEFAULT_STEVE_SKIN;
         }
 
@@ -66,9 +67,11 @@ public class BotPlayerSkinRenderer extends LivingEntityRenderer<BotEntity, Playe
         if (profile == null) {
             // Si pas en cache, utiliser le skin par défaut
             // La récupération asynchrone se fait en arrière-plan
+            System.out.println("[BotSkin] Bot " + bot.getBotName() + " has UUID " + playerUUID + " but NO GameProfile in cache - using default skin");
             return DEFAULT_STEVE_SKIN;
         }
 
+        System.out.println("[BotSkin] Bot " + bot.getBotName() + " loading skin from profile: " + profile.getName());
         // Convertir le GameProfile en ResourceLocation pour le skin
         return getSkinLocation(profile);
     }

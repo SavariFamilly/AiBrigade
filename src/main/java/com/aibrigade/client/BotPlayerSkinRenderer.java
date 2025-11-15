@@ -73,7 +73,13 @@ public class BotPlayerSkinRenderer extends LivingEntityRenderer<BotEntity, Playe
             var minecraft = net.minecraft.client.Minecraft.getInstance();
             var skinManager = minecraft.getSkinManager();
 
-            // Charger le skin depuis les serveurs Mojang (avec cache client intégré)
+            // Enregistrer le profil pour charger les textures de manière asynchrone
+            // Cela déclenche le téléchargement des textures si elles ne sont pas déjà en cache
+            skinManager.registerSkins(profile, (type, location, texture) -> {
+                // Callback appelé quand la texture est chargée (ne fait rien ici, juste pour déclencher le chargement)
+            }, true);
+
+            // Récupérer le skin (sera le skin par défaut jusqu'à ce que le téléchargement soit terminé)
             return skinManager.getInsecureSkinLocation(profile);
         } catch (Exception e) {
             System.err.println("[BotPlayerSkinRenderer] Error loading skin for UUID " + playerUUID + ": " + e.getMessage());

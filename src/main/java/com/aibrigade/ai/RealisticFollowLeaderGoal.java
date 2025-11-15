@@ -119,9 +119,42 @@ public class RealisticFollowLeaderGoal extends Goal {
             // Active follow: suit toujours le leader de près
             return distance > minFollowDistance;
         } else {
-            // Radius-based: se déplace vers sa position cible dans le radius
-            // Active le goal si pas trop proche du leader
-            return distance >= minFollowDistance;
+            // Radius-based: vérifier s'il faut se déplacer
+            // Trop proche du leader = ne pas bouger
+            if (distance < minFollowDistance) {
+                return false;
+            }
+
+            // Calculer/recalculer la position cible si nécessaire
+            if (targetPosition == null) {
+                return true; // Doit calculer une position
+            }
+
+            // Vérifier la distance à la position cible
+            Vec3 botPos = bot.position();
+            double distanceToTarget = botPos.distanceTo(targetPosition);
+
+            // Active le goal seulement si:
+            // 1. Le bot est loin de sa position cible (> 2 blocs), OU
+            // 2. Le bot est activement en train de chaser, OU
+            // 3. Le leader a bougé significativement (> 5 blocs de la dernière position cible)
+            if (distanceToTarget > 2.0) {
+                return true;
+            }
+
+            if (isActivelyChasing) {
+                return true;
+            }
+
+            // Vérifier si le leader a bougé
+            Vec3 leaderPos = leader.position();
+            double leaderMovement = leaderPos.distanceTo(new Vec3(targetPosition.x, leaderPos.y, targetPosition.z));
+            if (leaderMovement > 5.0) {
+                return true;
+            }
+
+            // Sinon, le bot est déjà à sa position, ne pas activer le goal
+            return false;
         }
     }
 

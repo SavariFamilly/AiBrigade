@@ -307,7 +307,17 @@ public class BotCommandHandler {
         // Get group info for diagnostics
         BotManager.BotGroup group = botManager.getBotGroups().get(groupName);
         if (group == null) {
-            context.getSource().sendFailure(Component.literal("Group '" + groupName + "' not found"));
+            // Group doesn't exist - show available groups
+            var availableGroups = botManager.getBotGroups().keySet();
+            if (availableGroups.isEmpty()) {
+                context.getSource().sendFailure(Component.literal(
+                    "§cGroup '" + groupName + "' not found!\n" +
+                    "§7No groups exist. Create one first with: §f/aibrigade spawn group ..."));
+            } else {
+                context.getSource().sendFailure(Component.literal(
+                    "§cGroup '" + groupName + "' not found!\n" +
+                    "§7Available groups: §f" + String.join(", ", availableGroups)));
+            }
             return 0;
         }
 

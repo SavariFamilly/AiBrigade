@@ -96,18 +96,34 @@ public class RealisticFollowLeaderGoal extends Goal {
     @Override
     public boolean canUse() {
         // Vérifier le mode statique et le follow
-        if (!EntityValidator.isBotAIReady(bot) || !bot.isFollowingLeader()) {
+        if (!EntityValidator.isBotAIReady(bot)) {
+            // Bot is static or not alive
+            return false;
+        }
+
+        if (!bot.isFollowingLeader()) {
+            // Follow leader flag not enabled
             return false;
         }
 
         UUID leaderId = bot.getLeaderId();
         if (leaderId == null) {
+            // No leader assigned - this is a problem!
+            if (bot.tickCount % 200 == 0) { // Log every 10 seconds
+                com.aibrigade.main.AIBrigadeMod.LOGGER.warn("Bot {} has followleader enabled but no leader assigned! Use /aibrigade assignleader",
+                    bot.getBotName());
+            }
             return false;
         }
 
         // Trouver le leader
         LivingEntity leader = EntityFinder.findEntityByUUID(bot.level(), leaderId, bot.position(), 100.0);
         if (leader == null) {
+            // Leader not found (too far or offline)
+            if (bot.tickCount % 200 == 0) { // Log every 10 seconds
+                com.aibrigade.main.AIBrigadeMod.LOGGER.warn("Bot {} cannot find leader with UUID {} (leader offline or too far?)",
+                    bot.getBotName(), leaderId);
+            }
             return false;
         }
 

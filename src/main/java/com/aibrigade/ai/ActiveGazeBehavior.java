@@ -114,8 +114,13 @@ public class ActiveGazeBehavior extends Goal {
     private void handleLookingAtLeader() {
         UUID leaderId = bot.getLeaderId();
 
-        // Si pas de leader, regarder droit devant
-        if (leaderId == null || !bot.isFollowingLeader()) {
+        // Si pas de leader ou follow leader pas activé, regarder droit devant
+        if (leaderId == null) {
+            return;
+        }
+
+        // Si followleader est désactivé, ne pas regarder le leader
+        if (!bot.isFollowingLeader()) {
             return;
         }
 

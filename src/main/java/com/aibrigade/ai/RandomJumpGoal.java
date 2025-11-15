@@ -59,10 +59,10 @@ public class RandomJumpGoal extends Goal {
 
         // Check if forced jumping is enabled
         if (bot.isForcedJumping()) {
-            // Forced jumping: jump every 10 ticks (0.5 seconds) when on ground
+            // Forced jumping: jump immediately when on ground (like a player bunny hopping)
             if (forcedJumpCooldown <= 0 && bot.onGround()) {
                 performJump();
-                forcedJumpCooldown = 10; // 0.5 second cooldown
+                forcedJumpCooldown = 1; // 1 tick cooldown (instant jump like players)
             }
         } else {
             // Random jumping

@@ -73,6 +73,9 @@ public class BotPlayerSkinRenderer extends LivingEntityRenderer<BotEntity, Playe
                 botName = "Bot";
             }
 
+            // Variable finale pour la lambda
+            final String finalBotName = botName;
+
             GameProfile profile = new GameProfile(playerUUID, botName);
 
             // Utiliser le SkinManager de Minecraft pour charger le skin
@@ -82,7 +85,7 @@ public class BotPlayerSkinRenderer extends LivingEntityRenderer<BotEntity, Playe
             // Enregistrer le profil pour charger les textures de manière asynchrone
             // Cela déclenche le téléchargement des textures si elles ne sont pas déjà en cache
             skinManager.registerSkins(profile, (type, location, texture) -> {
-                System.out.println("[BotSkinRenderer] Skin loaded callback for " + botName + ": " + location);
+                System.out.println("[BotSkinRenderer] Skin loaded callback for " + finalBotName + ": " + location);
             }, true);
 
             // Récupérer le skin (sera le skin par défaut jusqu'à ce que le téléchargement soit terminé)

@@ -186,8 +186,8 @@ public class BotEntity extends PathfinderMob {
         // Priorité 1: Active gaze behavior (regard actif 2/6 bots)
         this.goalSelector.addGoal(1, new ActiveGazeBehavior(this));
 
-        // Priorité 2: Realistic follow leader (avec probabilités et variations)
-        this.goalSelector.addGoal(2, new RealisticFollowLeaderGoal(this, 1.1D, 3.0F, 10.0F));
+        // Priorité 2: Realistic follow leader (RADIUS_FOLLOWER 5/6 ou CLOSE_FOLLOWER 1/6)
+        this.goalSelector.addGoal(2, new RealisticFollowLeaderGoal(this, 1.1D));
 
         // Priorité 3: Place blocks to reach target (avec toggle canPlaceBlocks)
         this.goalSelector.addGoal(3, new PlaceBlockToReachTargetGoal(this));

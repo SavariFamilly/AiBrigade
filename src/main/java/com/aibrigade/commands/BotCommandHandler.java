@@ -125,6 +125,11 @@ public class BotCommandHandler {
             .then(Commands.literal("listgroups")
                 .executes(BotCommandHandler::listGroups))
 
+            .then(Commands.literal("modify")
+                .then(Commands.argument("botName", StringArgumentType.string())
+                    .then(Commands.argument("newName", StringArgumentType.string())
+                        .executes(BotCommandHandler::modifyBotName))))
+
             .then(Commands.literal("help")
                 .executes(BotCommandHandler::showHelp))
         );
@@ -577,6 +582,53 @@ public class BotCommandHandler {
     }
 
     /**
+     * Command: /aibrigade modify <botName> <newName>
+     * Changes bot name and fetches the new skin
+     */
+    private static int modifyBotName(CommandContext<CommandSourceStack> context) {
+        String oldName = StringArgumentType.getString(context, "botName");
+        String newName = StringArgumentType.getString(context, "newName");
+
+        BotManager botManager = AIBrigadeMod.getBotManager();
+
+        // Trouver le bot par son nom
+        com.aibrigade.bots.BotEntity bot = botManager.findBotByName(oldName);
+        if (bot == null) {
+            context.getSource().sendFailure(Component.literal("Bot '" + oldName + "' not found!"));
+            return 0;
+        }
+
+        // Fetch le skin du nouveau nom de manière asynchrone
+        com.aibrigade.bots.MojangSkinFetcher.getUUIDFromUsername(newName).thenAccept(uuid -> {
+            if (uuid == null) {
+                context.getSource().sendFailure(Component.literal("Player '" + newName + "' does not exist!"));
+                return;
+            }
+
+            // Appliquer le nouveau nom
+            bot.setBotName(newName);
+            bot.setPlayerUUID(uuid);
+
+            // Fetch le profil complet avec le skin
+            com.aibrigade.bots.MojangSkinFetcher.fetchProfileAsync(uuid).thenAccept(profile -> {
+                if (profile != null) {
+                    com.aibrigade.bots.MojangSkinFetcher.applyProfileToBot(bot, profile);
+                    context.getSource().sendSuccess(() ->
+                        Component.literal("Bot renamed to '" + newName + "' with skin!"),
+                        true);
+                    AIBrigadeMod.LOGGER.info("Bot {} renamed to {} with skin", oldName, newName);
+                } else {
+                    context.getSource().sendSuccess(() ->
+                        Component.literal("Bot renamed to '" + newName + "' but skin fetch failed!"),
+                        true);
+                }
+            });
+        });
+
+        return 1;
+    }
+
+    /**
      * Command: /aibrigade help
      * Shows help information
      */
@@ -595,6 +647,7 @@ public class BotCommandHandler {
             /aibrigade togglestatic <target>
             /aibrigade removebot <botName>
             /aibrigade removegroup <groupName>
+            /aibrigade modify <botName> <newName> - Change name and fetch new skin
             /aibrigade groupinfo <groupName>
             /aibrigade listbots - Show active bot count
             /aibrigade cleanupbots - Manually remove dead bots

@@ -1,11 +1,9 @@
 package com.aibrigade.ai;
 
 import com.aibrigade.bots.BotEntity;
-import com.aibrigade.persistence.BotDatabase;
 import com.aibrigade.utils.*;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.goal.Goal;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.core.BlockPos;
@@ -15,87 +13,64 @@ import java.util.Random;
 import java.util.UUID;
 
 /**
- * RealisticFollowLeaderGoal - Système de follow réaliste avec probabilités
+ * RealisticFollowLeaderGoal - Système de follow simple et fonctionnel
  *
- * Selon le cahier des charges:
- * - 5/6 des bots suivent dans le radius défini (comportement radius-based)
- * - 1/6 des bots suivent activement le leader (comportement actif proche)
- * - Follow dans un rayon avec positions aléatoires (pas tous au même point)
- * - Variation de vitesse pour un effet organique
- * - Trajectoires légèrement courbes (pas de lignes droites)
- * - Petites pauses aléatoires
- * - Évitement des collisions
- * - Respect du mode statique
+ * Deux modes selon le ratio configuré:
+ * - RADIUS_FOLLOWER (5/6): Suit pour rester dans le radius défini autour du leader
+ * - CLOSE_FOLLOWER (1/6): Suit très proche du leader (2-4 blocs)
+ *
+ * Chaque bot a une position unique calculée à partir de son UUID.
+ * Pas de système de "chase probability" - c'est simple et direct.
  */
 public class RealisticFollowLeaderGoal extends Goal {
 
     private final BotEntity bot;
     private final double speedModifier;
-    private final float minFollowDistance;
-    private final float maxFollowDistance;
     private final Random random;
 
-    // Comportement selon le cahier des charges
-    private FollowBehaviorType behaviorType;  // Type de comportement (RADIUS_BASED ou ACTIVE_FOLLOW)
-
-    // Comportement aléatoire
-    private float chaseChance;           // Probabilité de suivre activement (0.0 - 1.0)
-    private boolean isActivelyChasing;   // Est-ce que ce bot est en train de poursuivre?
-    private int chaseDecisionCooldown;   // Cooldown pour recalculer la décision
+    // Type de suiveur (défini au spawn, ne change jamais)
+    private final FollowType followType;
 
     /**
-     * Types de comportement de follow
+     * Types de suiveur
      */
-    public enum FollowBehaviorType {
-        RADIUS_BASED,    // 5/6 - Reste dans le radius, ne suit pas activement
-        ACTIVE_FOLLOW    // 1/6 - Suit activement le leader de près
+    public enum FollowType {
+        RADIUS_FOLLOWER,    // 5/6 - Suit dans le radius
+        CLOSE_FOLLOWER      // 1/6 - Suit très proche
     }
 
-    // Mouvement réaliste
-    private Vec3 targetPosition;         // Position cible unique du bot
-    private int recalculatePathTimer;
+    // Position cible
+    private Vec3 targetPosition;
+    private int recalculateTimer;
 
     // Variation de vitesse
     private double currentSpeedMultiplier;
     private int speedChangeTimer;
 
-    // Pause aléatoire
-    private int pauseTimer;
-    private boolean isPaused;
-
-    // Trajectoire courbe
-    private double curveOffset;
-    private int curveUpdateTimer;
-
-    public RealisticFollowLeaderGoal(BotEntity bot, double speed, float minDist, float maxDist) {
+    public RealisticFollowLeaderGoal(BotEntity bot, double speed) {
         this.bot = bot;
         this.speedModifier = speed;
-        this.minFollowDistance = minDist;
-        this.maxFollowDistance = maxDist;
         this.random = new Random(bot.getUUID().getMostSignificantBits());
 
         this.setFlags(EnumSet.of(Goal.Flag.MOVE, Goal.Flag.LOOK));
 
-        // Déterminer le type de comportement selon les probabilités (1/6 vs 5/6)
+        // Déterminer le type DÉFINITIVEMENT (1/6 vs 5/6)
+        // Utilisez l'UUID pour que ce soit consistant
         if (random.nextFloat() < BotAIConstants.ACTIVE_FOLLOW_PROBABILITY) {
-            this.behaviorType = FollowBehaviorType.ACTIVE_FOLLOW;
-            this.chaseChance = 0.95f; // Suit activement presque toujours
+            this.followType = FollowType.CLOSE_FOLLOWER;
         } else {
-            this.behaviorType = FollowBehaviorType.RADIUS_BASED;
-            this.chaseChance = 0.85f; // Suit activement pour rester dans le radius
+            this.followType = FollowType.RADIUS_FOLLOWER;
         }
 
-        // Initialiser les comportements aléatoires
-        this.currentSpeedMultiplier = 0.9 + random.nextDouble() * 0.2; // 0.9-1.1x
-        this.isActivelyChasing = random.nextFloat() < chaseChance;
+        this.currentSpeedMultiplier = 1.0;
 
-        System.out.println("[RealisticFollowLeaderGoal] Bot " + bot.getBotName() +
-            " configured with behavior: " + behaviorType + " (chase chance: " + chaseChance + ")");
+        com.aibrigade.main.AIBrigadeMod.LOGGER.info("Bot {} configured as {}",
+            bot.getBotName(), followType);
     }
 
     @Override
     public boolean canUse() {
-        // Vérifier le mode statique et le follow
+        // Ne suit pas si statique ou follow désactivé
         if (!EntityValidator.isBotAIReady(bot) || !bot.isFollowingLeader()) {
             return false;
         }
@@ -111,35 +86,27 @@ public class RealisticFollowLeaderGoal extends Goal {
             return false;
         }
 
-        // Distance au leader
         double distance = DistanceHelper.getDistance(bot, leader);
 
-        // Comportement selon le type
-        if (behaviorType == FollowBehaviorType.ACTIVE_FOLLOW) {
-            // Active follow: suit toujours le leader de près
-            return distance > minFollowDistance;
+        // Logic simple selon le type
+        if (followType == FollowType.CLOSE_FOLLOWER) {
+            // Suit si plus loin que 2 blocs
+            return distance > 2.0;
         } else {
-            // Radius-based: suit activement pour rester dans le radius
-            // Ne suit pas si trop proche du leader
-            if (distance < minFollowDistance) {
-                return false;
-            }
-
-            // Suit toujours pour se repositionner dans le radius (même si déjà dedans)
-            // Car chaque bot a sa position unique dans le radius
-            return true;
+            // RADIUS_FOLLOWER: suit si hors du radius
+            float radius = bot.getFollowRadius();
+            return distance > radius || distance < (radius * 0.5); // Trop loin OU trop proche
         }
     }
 
     @Override
     public boolean canContinueToUse() {
-        // Vérifier le mode statique
-        if (!EntityValidator.isBotAIReady(bot)) {
+        if (!EntityValidator.isBotAIReady(bot) || !bot.isFollowingLeader()) {
             return false;
         }
 
         UUID leaderId = bot.getLeaderId();
-        if (leaderId == null || !bot.isFollowingLeader()) {
+        if (leaderId == null) {
             return false;
         }
 
@@ -150,30 +117,21 @@ public class RealisticFollowLeaderGoal extends Goal {
 
         double distance = DistanceHelper.getDistance(bot, leader);
 
-        // Si trop proche, arrêter
-        if (distance < minFollowDistance) {
-            return false;
+        if (followType == FollowType.CLOSE_FOLLOWER) {
+            // Continue si pas trop proche
+            return distance > 1.5;
+        } else {
+            // RADIUS_FOLLOWER: continue si pas parfaitement positionné
+            float radius = bot.getFollowRadius();
+            return distance > radius * 0.9 || distance < radius * 0.6;
         }
-
-        // Si en pause, continuer l'objectif mais ne pas bouger
-        if (isPaused) {
-            return true;
-        }
-
-        return distance > minFollowDistance;
     }
 
     @Override
     public void start() {
-        // Initialiser le mouvement
-        recalculatePathTimer = 0;
+        recalculateTimer = 0;
         speedChangeTimer = 0;
-        curveUpdateTimer = 0;
-        pauseTimer = 0;
-        isPaused = false;
-
-        // Décider si ce bot va activement chase
-        updateChaseDecision();
+        targetPosition = null;
     }
 
     @Override
@@ -184,92 +142,43 @@ public class RealisticFollowLeaderGoal extends Goal {
         LivingEntity leader = EntityFinder.findEntityByUUID(bot.level(), leaderId, bot.position(), 100.0);
         if (leader == null) return;
 
-        // === 1. Décision de chase (probabilité) ===
-        chaseDecisionCooldown--;
-        if (chaseDecisionCooldown <= 0) {
-            updateChaseDecision();
-        }
-
         double distance = DistanceHelper.getDistance(bot, leader);
 
-        // Les deux types de bots doivent suivre activement:
-        // - ACTIVE_FOLLOW: très proche du leader
-        // - RADIUS_BASED: dans le radius défini (pas juste regarder)
-
-        // === 2. Pause aléatoire ===
-        if (isPaused) {
-            pauseTimer--;
-            if (pauseTimer <= 0) {
-                isPaused = false;
-            }
-            BotMovementHelper.stopMovement(bot);
-            return;
-        }
-
-        // Chance de pause (5%)
-        if (random.nextFloat() < 0.05) {
-            isPaused = true;
-            pauseTimer = 10 + random.nextInt(20); // 0.5 - 1.5 secondes
-            return;
-        }
-
-        // === 3. Variation de vitesse ===
+        // Variation de vitesse toutes les 3 secondes
         speedChangeTimer--;
         if (speedChangeTimer <= 0) {
-            // Changer légèrement la vitesse (0.85x - 1.15x)
-            currentSpeedMultiplier = 0.85 + random.nextDouble() * 0.3;
-            speedChangeTimer = BotAIConstants.SPEED_CHANGE_INTERVAL_TICKS;
+            currentSpeedMultiplier = 0.9 + random.nextDouble() * 0.2; // 0.9-1.1x
+            speedChangeTimer = 60;
         }
 
-        // === 4. Trajectoire courbe ===
-        curveUpdateTimer--;
-        if (curveUpdateTimer <= 0) {
-            curveOffset = (random.nextDouble() - 0.5) * 2.0; // -1.0 à +1.0
-            curveUpdateTimer = 15; // 0.75 secondes
-        }
-
-        // === 5. Recalcul de la position cible ===
-        recalculatePathTimer--;
-        if (recalculatePathTimer <= 0 || targetPosition == null) {
-            // Position différente selon le type de comportement
-            if (behaviorType == FollowBehaviorType.ACTIVE_FOLLOW) {
-                // Active follow: vise une position très proche du leader
+        // Recalculer la position cible toutes les secondes
+        recalculateTimer--;
+        if (recalculateTimer <= 0 || targetPosition == null) {
+            if (followType == FollowType.CLOSE_FOLLOWER) {
                 targetPosition = calculateClosePosition(leader);
             } else {
-                // Radius-based: vise une position dans le radius
-                targetPosition = calculateSpreadPosition(leader);
+                targetPosition = calculateRadiusPosition(leader);
             }
-            recalculatePathTimer = BotAIConstants.PATH_RECALC_INTERVAL_TICKS;
+            recalculateTimer = 20; // 1 seconde
         }
 
-        // === 6. Appliquer la trajectoire courbe ===
-        Vec3 curvedTarget = applyCurveToPath(targetPosition);
-
-        // === 7. Déplacement ===
+        // Calculer la vitesse
         double finalSpeed = speedModifier * currentSpeedMultiplier;
 
-        // Boost de vitesse selon le type et la distance
-        if (behaviorType == FollowBehaviorType.ACTIVE_FOLLOW) {
-            // Active followers sont plus rapides pour rester près
-            if (distance > minFollowDistance * 3) {
-                finalSpeed *= 1.4;
-            } else if (distance > minFollowDistance * 2) {
-                finalSpeed *= 1.2;
-            }
-        } else {
-            // Radius-based boost si trop loin du radius
-            if (distance > maxFollowDistance * 2) {
-                finalSpeed *= 1.3;
-            } else if (distance > maxFollowDistance * 1.5) {
-                finalSpeed *= 1.15;
-            }
+        // Boost si trop loin
+        if (distance > bot.getFollowRadius() * 1.5) {
+            finalSpeed *= 1.4;
+        } else if (distance > bot.getFollowRadius() * 1.2) {
+            finalSpeed *= 1.2;
         }
 
-        // Naviguer vers la position
-        BotMovementHelper.moveToPosition(bot, curvedTarget, finalSpeed);
+        // Se déplacer
+        BotMovementHelper.moveToPosition(bot, targetPosition, finalSpeed);
 
-        // === 8. Regarder le leader ===
-        BotLookHelper.lookAtEntity(bot, leader, BotAIConstants.LOOK_YAW_SPEED_FAST, BotAIConstants.LOOK_PITCH_SPEED_FAST);
+        // Regarder le leader
+        BotLookHelper.lookAtEntity(bot, leader,
+            BotAIConstants.LOOK_YAW_SPEED_FAST,
+            BotAIConstants.LOOK_PITCH_SPEED_FAST);
     }
 
     @Override
@@ -279,134 +188,67 @@ public class RealisticFollowLeaderGoal extends Goal {
     }
 
     /**
-     * Met à jour la décision de chase basée sur la probabilité
-     */
-    private void updateChaseDecision() {
-        // Récupérer la chance depuis la base de données si disponible
-        BotDatabase.BotData data = BotDatabase.getBotData(bot.getUUID());
-        if (data != null) {
-            chaseChance = data.chaseChance;
-        }
-
-        // Décider si le bot va activement chase
-        isActivelyChasing = random.nextFloat() < chaseChance;
-
-        // Reset le cooldown
-        chaseDecisionCooldown = BotAIConstants.DECISION_INTERVAL_TICKS;
-    }
-
-    /**
-     * Calcule une position très proche du leader (pour active followers)
+     * Calcule une position proche du leader (2-4 blocs)
      */
     private Vec3 calculateClosePosition(LivingEntity leader) {
         Vec3 leaderPos = leader.position();
 
-        // Utiliser l'UUID pour avoir une position cohérente
-        long seed = bot.getUUID().getMostSignificantBits() ^ leader.getUUID().getMostSignificantBits();
-        Random posRandom = new Random(seed + (System.currentTimeMillis() / 1000));
+        // Angle unique basé sur l'UUID (constant pour ce bot)
+        double angle = (bot.getUUID().getMostSignificantBits() % 360) * Math.PI / 180.0;
 
-        // Angle unique basé sur l'UUID
-        double baseAngle = (bot.getUUID().getMostSignificantBits() % 360) * Math.PI / 180.0;
-        double angleVariation = (posRandom.nextDouble() - 0.5) * 0.3;
-        double angle = baseAngle + angleVariation;
+        // Distance 2-3.5 blocs
+        double distance = 2.0 + random.nextDouble() * 1.5;
 
-        // Distance très proche (2-4 blocs du leader)
-        double distance = minFollowDistance + posRandom.nextDouble() * 2.0;
-
-        // Calculer la position
+        // Position autour du leader
         double offsetX = Math.cos(angle) * distance;
         double offsetZ = Math.sin(angle) * distance;
 
-        Vec3 targetPos = leaderPos.add(offsetX, 0, offsetZ);
-
-        // Trouver le sol (Y)
-        Level level = bot.level();
-        BlockPos groundPos = new BlockPos((int)targetPos.x, (int)leaderPos.y, (int)targetPos.z);
-
-        for (int dy = -3; dy <= 3; dy++) {
-            BlockPos checkPos = groundPos.offset(0, dy, 0);
-            if (BlockHelper.isSolidBlock(level, checkPos) && BlockHelper.isAirBlock(level, checkPos.above())) {
-                return new Vec3(targetPos.x, checkPos.getY() + 1, targetPos.z);
-            }
-        }
-
-        return targetPos;
+        return findGroundPosition(leaderPos.add(offsetX, 0, offsetZ), leaderPos.y);
     }
 
     /**
-     * Calcule une position éparpillée unique pour ce bot dans le rayon
+     * Calcule une position dans le radius défini
      */
-    private Vec3 calculateSpreadPosition(LivingEntity leader) {
+    private Vec3 calculateRadiusPosition(LivingEntity leader) {
         Vec3 leaderPos = leader.position();
-
-        // Utiliser l'UUID pour avoir une position cohérente mais unique
-        long seed = bot.getUUID().getMostSignificantBits() ^ leader.getUUID().getMostSignificantBits();
-        Random posRandom = new Random(seed + (System.currentTimeMillis() / 1000)); // Change chaque seconde
-
-        // Angle basé sur l'UUID (chaque bot a son propre angle)
-        double baseAngle = (bot.getUUID().getMostSignificantBits() % 360) * Math.PI / 180.0;
-
-        // Ajouter une légère variation
-        double angleVariation = (posRandom.nextDouble() - 0.5) * 0.5; // ±0.25 radians
-        double angle = baseAngle + angleVariation;
-
-        // Distance dans le rayon (70% - 90% du rayon max pour éviter les bords)
         float radius = bot.getFollowRadius();
-        double distance = radius * (0.7 + posRandom.nextDouble() * 0.2);
 
-        // Calculer la position
+        // Angle unique basé sur l'UUID (constant pour ce bot)
+        double angle = (bot.getUUID().getMostSignificantBits() % 360) * Math.PI / 180.0;
+
+        // Distance dans le radius (70-90% du rayon pour éviter les bords)
+        double distance = radius * (0.7 + random.nextDouble() * 0.2);
+
+        // Position dans le radius
         double offsetX = Math.cos(angle) * distance;
         double offsetZ = Math.sin(angle) * distance;
 
-        Vec3 targetPos = leaderPos.add(offsetX, 0, offsetZ);
+        return findGroundPosition(leaderPos.add(offsetX, 0, offsetZ), leaderPos.y);
+    }
 
-        // Trouver le sol (Y)
+    /**
+     * Trouve le sol à partir d'une position cible
+     */
+    private Vec3 findGroundPosition(Vec3 targetPos, double leaderY) {
         Level level = bot.level();
-        BlockPos groundPos = new BlockPos((int)targetPos.x, (int)leaderPos.y, (int)targetPos.z);
+        BlockPos checkPos = new BlockPos((int)targetPos.x, (int)leaderY, (int)targetPos.z);
 
-        // Chercher le bloc solide le plus proche
+        // Chercher le sol ±3 blocs
         for (int dy = -3; dy <= 3; dy++) {
-            BlockPos checkPos = groundPos.offset(0, dy, 0);
-            if (BlockHelper.isSolidBlock(level, checkPos) && BlockHelper.isAirBlock(level, checkPos.above())) {
-                return new Vec3(targetPos.x, checkPos.getY() + 1, targetPos.z);
+            BlockPos pos = checkPos.offset(0, dy, 0);
+            if (BlockHelper.isSolidBlock(level, pos) && BlockHelper.isAirBlock(level, pos.above())) {
+                return new Vec3(targetPos.x, pos.getY() + 1, targetPos.z);
             }
         }
 
+        // Fallback
         return targetPos;
     }
 
     /**
-     * Applique une courbe à la trajectoire pour éviter les lignes droites
+     * Obtient le type de suiveur
      */
-    private Vec3 applyCurveToPath(Vec3 target) {
-        Vec3 botPos = bot.position();
-        Vec3 direction = target.subtract(botPos).normalize();
-
-        // Vecteur perpendiculaire pour la courbe
-        Vec3 perpendicular = new Vec3(-direction.z, 0, direction.x);
-
-        // Appliquer l'offset de courbe
-        return target.add(perpendicular.scale(curveOffset));
-    }
-
-    /**
-     * Change la probabilité de chase pour ce bot
-     */
-    public void setChaseChance(float chance) {
-        this.chaseChance = Math.max(0.0f, Math.min(1.0f, chance));
-    }
-
-    /**
-     * Obtient la probabilité de chase actuelle
-     */
-    public float getChaseChance() {
-        return chaseChance;
-    }
-
-    /**
-     * Vérifie si le bot est en train de chase activement
-     */
-    public boolean isActivelyChasing() {
-        return isActivelyChasing;
+    public FollowType getFollowType() {
+        return followType;
     }
 }

@@ -5,6 +5,7 @@ import com.aibrigade.ai.ActiveGazeBehavior;
 import com.aibrigade.ai.TeamAwareAttackGoal;
 import com.aibrigade.ai.PlaceBlockToReachTargetGoal;
 import com.aibrigade.ai.RandomJumpGoal;
+import com.aibrigade.ai.StaticBotDefenseGoal;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
@@ -180,36 +181,39 @@ public class BotEntity extends PathfinderMob {
         // Priorité 0: Float in water
         this.goalSelector.addGoal(0, new net.minecraft.world.entity.ai.goal.FloatGoal(this));
 
-        // Priorité 1: Active gaze behavior (regard actif 2/6 bots)
-        this.goalSelector.addGoal(1, new ActiveGazeBehavior(this));
+        // Priorité 1: Static bot defense (allows static bots to attack hostile mobs and move ONLY for this)
+        this.goalSelector.addGoal(1, new StaticBotDefenseGoal(this, 16.0));
 
-        // Priorité 2: Realistic follow leader (avec probabilités et variations)
-        this.goalSelector.addGoal(2, new RealisticFollowLeaderGoal(this, 1.1D, 3.0F, 10.0F));
+        // Priorité 2: Active gaze behavior (regard actif 2/6 bots)
+        this.goalSelector.addGoal(2, new ActiveGazeBehavior(this));
 
-        // Priorité 3: Place blocks to reach target (avec toggle canPlaceBlocks)
-        this.goalSelector.addGoal(3, new PlaceBlockToReachTargetGoal(this));
+        // Priorité 3: Realistic follow leader (avec probabilités et variations)
+        this.goalSelector.addGoal(3, new RealisticFollowLeaderGoal(this, 1.1D, 3.0F, 10.0F));
 
-        // Priorité 4: Melee attack
-        this.goalSelector.addGoal(4, new net.minecraft.world.entity.ai.goal.MeleeAttackGoal(this, 1.2D, false));
+        // Priorité 4: Place blocks to reach target (avec toggle canPlaceBlocks)
+        this.goalSelector.addGoal(4, new PlaceBlockToReachTargetGoal(this));
 
-        // Priorité 5: Wander when idle
-        this.goalSelector.addGoal(5, new net.minecraft.world.entity.ai.goal.WaterAvoidingRandomStrollGoal(this, 0.8D));
+        // Priorité 5: Melee attack (for non-static bots)
+        this.goalSelector.addGoal(5, new net.minecraft.world.entity.ai.goal.MeleeAttackGoal(this, 1.2D, false));
 
-        // Priorité 6: Look at player (secondaire car ActiveGazeBehavior gère déjà)
-        this.goalSelector.addGoal(6, new net.minecraft.world.entity.ai.goal.LookAtPlayerGoal(this, Player.class, 8.0F));
+        // Priorité 6: Wander when idle (only non-static bots)
+        this.goalSelector.addGoal(6, new net.minecraft.world.entity.ai.goal.WaterAvoidingRandomStrollGoal(this, 0.8D));
 
-        // Priorité 7: Random look around
-        this.goalSelector.addGoal(7, new net.minecraft.world.entity.ai.goal.RandomLookAroundGoal(this));
+        // Priorité 7: Look at player (secondaire car ActiveGazeBehavior gère déjà)
+        this.goalSelector.addGoal(7, new net.minecraft.world.entity.ai.goal.LookAtPlayerGoal(this, Player.class, 8.0F));
 
-        // Priorité 8: Random jump (2-30 minutes intervals, or forced continuous)
-        this.goalSelector.addGoal(8, new RandomJumpGoal(this));
+        // Priorité 8: Random look around
+        this.goalSelector.addGoal(8, new net.minecraft.world.entity.ai.goal.RandomLookAroundGoal(this));
+
+        // Priorité 9: Random jump (2-30 minutes intervals, or forced continuous)
+        this.goalSelector.addGoal(9, new RandomJumpGoal(this));
 
         // Add TEAM-AWARE attack target selectors (won't attack teammates)
         this.targetSelector.addGoal(1, new net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal(this));
         this.targetSelector.addGoal(2, TeamAwareAttackGoal.forPlayer(this)); // Only attack players if hostile & not leader
         this.targetSelector.addGoal(3, TeamAwareAttackGoal.forBot(this)); // Only attack bots if hostile & not same team
         this.targetSelector.addGoal(4, new net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal<>(
-            this, net.minecraft.world.entity.monster.Monster.class, true)); // Attack hostile mobs
+            this, net.minecraft.world.entity.monster.Monster.class, true)); // Attack hostile mobs (also works for static bots via StaticBotDefenseGoal)
     }
 
     // Getters and setters for bot properties

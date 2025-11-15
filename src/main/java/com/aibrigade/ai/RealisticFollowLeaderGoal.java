@@ -193,12 +193,8 @@ public class RealisticFollowLeaderGoal extends Goal {
             updateChaseDecision();
         }
 
-        // Si pas en train de chase et dans le rayon, ne rien faire
+        // Calculer la distance au leader
         double distance = DistanceHelper.getDistance(bot, leader);
-        if (!isActivelyChasing && distance < maxFollowDistance) {
-            BotMovementHelper.stopMovement(bot);
-            return;
-        }
 
         // === 2. Pause aléatoire ===
         if (isPaused) {
@@ -246,10 +242,22 @@ public class RealisticFollowLeaderGoal extends Goal {
             recalculatePathTimer = BotAIConstants.PATH_RECALC_INTERVAL_TICKS;
         }
 
-        // === 6. Appliquer la trajectoire courbe ===
+        // === 6. Vérifier si le bot est déjà à sa position cible ===
+        Vec3 botPos = bot.position();
+        double distanceToTarget = botPos.distanceTo(targetPosition);
+
+        // Si déjà à la position cible (dans un rayon de 1.5 blocs), ne pas bouger
+        if (distanceToTarget < 1.5 && behaviorType == FollowBehaviorType.RADIUS_BASED && !isActivelyChasing) {
+            BotMovementHelper.stopMovement(bot);
+            // Continuer à regarder le leader
+            BotLookHelper.lookAtEntity(bot, leader, BotAIConstants.LOOK_YAW_SPEED_FAST, BotAIConstants.LOOK_PITCH_SPEED_FAST);
+            return;
+        }
+
+        // === 7. Appliquer la trajectoire courbe ===
         Vec3 curvedTarget = applyCurveToPath(targetPosition);
 
-        // === 7. Déplacement ===
+        // === 8. Déplacement ===
         double finalSpeed = speedModifier * currentSpeedMultiplier;
 
         // Boost de vitesse selon le type et la distance
@@ -272,7 +280,7 @@ public class RealisticFollowLeaderGoal extends Goal {
         // Naviguer vers la position
         BotMovementHelper.moveToPosition(bot, curvedTarget, finalSpeed);
 
-        // === 8. Regarder le leader ===
+        // === 9. Regarder le leader ===
         BotLookHelper.lookAtEntity(bot, leader, BotAIConstants.LOOK_YAW_SPEED_FAST, BotAIConstants.LOOK_PITCH_SPEED_FAST);
     }
 

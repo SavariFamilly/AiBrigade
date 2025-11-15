@@ -60,45 +60,25 @@ public class BotPlayerSkinRenderer extends LivingEntityRenderer<BotEntity, Playe
             return DEFAULT_STEVE_SKIN;
         }
 
-        // Récupérer le GameProfile depuis le cache
-        GameProfile profile = MojangSkinFetcher.getCachedProfile(playerUUID);
-
-        if (profile == null) {
-            // Si pas en cache, utiliser le skin par défaut
-            // La récupération asynchrone se fait en arrière-plan
-            return DEFAULT_STEVE_SKIN;
-        }
-
-        // Convertir le GameProfile en ResourceLocation pour le skin
-        return getSkinLocation(profile);
-    }
-
-    /**
-     * Convertit un GameProfile en ResourceLocation de skin
-     * Utilise le système de cache de skins de Minecraft
-     */
-    private ResourceLocation getSkinLocation(GameProfile profile) {
         try {
-            // Utiliser le SkinManager de Minecraft pour obtenir le skin
+            // Créer un GameProfile avec l'UUID et le nom du bot
+            String botName = bot.getBotName();
+            if (botName == null || botName.isEmpty()) {
+                botName = "Bot";
+            }
+
+            GameProfile profile = new GameProfile(playerUUID, botName);
+
+            // Utiliser le SkinManager de Minecraft pour charger le skin
             var minecraft = net.minecraft.client.Minecraft.getInstance();
             var skinManager = minecraft.getSkinManager();
 
-            // Récupérer les informations de skin depuis le profil
-            var textureMap = skinManager.getInsecureSkinInformation(profile);
-
-            if (textureMap != null && !textureMap.isEmpty()) {
-                // Récupérer la texture de type SKIN
-                var skinTexture = textureMap.get(com.mojang.authlib.minecraft.MinecraftProfileTexture.Type.SKIN);
-                if (skinTexture != null) {
-                    return skinManager.registerTexture(skinTexture, com.mojang.authlib.minecraft.MinecraftProfileTexture.Type.SKIN);
-                }
-            }
+            // Charger le skin depuis les serveurs Mojang (avec cache client intégré)
+            return skinManager.getInsecureSkinLocation(profile);
         } catch (Exception e) {
-            System.err.println("[BotPlayerSkinRenderer] Error getting skin for profile: " + e.getMessage());
+            System.err.println("[BotPlayerSkinRenderer] Error loading skin for UUID " + playerUUID + ": " + e.getMessage());
+            return DEFAULT_STEVE_SKIN;
         }
-
-        // Fallback vers skin par défaut
-        return DEFAULT_STEVE_SKIN;
     }
 
     @Override

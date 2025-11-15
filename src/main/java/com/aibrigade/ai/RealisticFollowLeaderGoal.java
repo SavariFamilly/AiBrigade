@@ -119,18 +119,9 @@ public class RealisticFollowLeaderGoal extends Goal {
             // Active follow: suit toujours le leader de près
             return distance > minFollowDistance;
         } else {
-            // Radius-based: reste dans le radius
-            // Si trop proche, ne pas suivre
-            if (distance < minFollowDistance) {
-                return false;
-            }
-
-            // Si dans le rayon et pas en train de chase, ne pas bouger
-            if (distance < maxFollowDistance && !isActivelyChasing) {
-                return false;
-            }
-
-            return true;
+            // Radius-based: se déplace vers sa position cible dans le radius
+            // Active le goal si pas trop proche du leader
+            return distance >= minFollowDistance;
         }
     }
 

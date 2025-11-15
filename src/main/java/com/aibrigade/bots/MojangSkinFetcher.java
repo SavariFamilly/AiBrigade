@@ -395,19 +395,34 @@ public class MojangSkinFetcher {
                     // Ne devrait pas arriver car on a déjà vérifié
                     com.aibrigade.main.AIBrigadeMod.LOGGER.error("UUID became null for {}", username);
                     UUID fallbackUUID = UUID.randomUUID();
-                    bot.setPlayerUUID(fallbackUUID);
-                    bot.setBotName("Bot_" + fallbackUUID.toString().substring(0, 8));
+
+                    // Exécuter sur le thread du serveur pour garantir la synchronisation
+                    if (bot.level() != null && bot.level().getServer() != null) {
+                        bot.level().getServer().execute(() -> {
+                            bot.setPlayerUUID(fallbackUUID);
+                            bot.setBotName("Bot_" + fallbackUUID.toString().substring(0, 8));
+                        });
+                    }
                     return;
                 }
 
                 // Marquer comme utilisé
                 USED_PLAYER_UUIDS.add(uuid);
 
-                // Appliquer l'UUID et le nom
-                bot.setPlayerUUID(uuid);
-                bot.setBotName(username);
-
-                com.aibrigade.main.AIBrigadeMod.LOGGER.info("✓ Bot configured with verified player: {} ({})", username, uuid);
+                // Appliquer l'UUID et le nom SUR LE THREAD DU SERVEUR
+                // IMPORTANT : Les modifications EntityData doivent être faites sur le thread principal
+                if (bot.level() != null && bot.level().getServer() != null) {
+                    bot.level().getServer().execute(() -> {
+                        bot.setPlayerUUID(uuid);
+                        bot.setBotName(username);
+                        com.aibrigade.main.AIBrigadeMod.LOGGER.info("✓ Bot configured with verified player: {} ({})", username, uuid);
+                    });
+                } else {
+                    // Fallback si pas de serveur (ne devrait pas arriver)
+                    bot.setPlayerUUID(uuid);
+                    bot.setBotName(username);
+                    com.aibrigade.main.AIBrigadeMod.LOGGER.info("✓ Bot configured with verified player: {} ({})", username, uuid);
+                }
 
                 // Fetch le profil complet en arrière-plan pour les textures
                 fetchProfileAsync(uuid).thenAccept(profile -> {

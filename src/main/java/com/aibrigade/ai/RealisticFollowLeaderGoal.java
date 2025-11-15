@@ -136,28 +136,21 @@ public class RealisticFollowLeaderGoal extends Goal {
 
         // Comportement selon le type
         if (behaviorType == FollowBehaviorType.ACTIVE_FOLLOW) {
-            // Active follow: suit toujours le leader de près
+            // Active follow: suit TOUJOURS le leader de très près (1/6 des bots)
+            // S'arrête seulement quand très proche (minFollowDistance = 3 blocs)
             return distance > minFollowDistance;
         } else {
-            // Radius-based: reste dans le radius
-            // Si trop proche, ne pas suivre
-            if (distance < minFollowDistance) {
-                return false;
-            }
-
-            // Si dans le rayon et pas en train de chase, ne pas bouger
-            if (distance < maxFollowDistance && !isActivelyChasing) {
-                return false;
-            }
-
-            return true;
+            // Radius-based: suit le leader ACTIVEMENT jusqu'au radius (5/6 des bots)
+            // S'arrête quand dans le radius (maxFollowDistance = follow radius config)
+            // Ne bouge PAS s'il est déjà dans le radius
+            return distance > maxFollowDistance;
         }
     }
 
     @Override
     public boolean canContinueToUse() {
-        // Vérifier le mode statique
-        if (!EntityValidator.isBotAIReady(bot)) {
+        // Bot must be alive and not static
+        if (!bot.isAlive() || bot.isStatic()) {
             return false;
         }
 
@@ -173,17 +166,14 @@ public class RealisticFollowLeaderGoal extends Goal {
 
         double distance = DistanceHelper.getDistance(bot, leader);
 
-        // Si trop proche, arrêter
-        if (distance < minFollowDistance) {
-            return false;
+        // Arrêter selon le type de comportement
+        if (behaviorType == FollowBehaviorType.ACTIVE_FOLLOW) {
+            // Active follow: arrête quand très proche
+            return distance > minFollowDistance;
+        } else {
+            // Radius-based: arrête quand dans le radius
+            return distance > maxFollowDistance;
         }
-
-        // Si en pause, continuer l'objectif mais ne pas bouger
-        if (isPaused) {
-            return true;
-        }
-
-        return distance > minFollowDistance;
     }
 
     @Override

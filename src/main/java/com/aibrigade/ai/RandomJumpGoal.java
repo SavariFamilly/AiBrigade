@@ -52,6 +52,11 @@ public class RandomJumpGoal extends Goal {
 
     @Override
     public void tick() {
+        // Static bots should NOT jump randomly (they stay in place)
+        if (bot.isStatic()) {
+            return;
+        }
+
         // Decrease cooldown
         if (forcedJumpCooldown > 0) {
             forcedJumpCooldown--;

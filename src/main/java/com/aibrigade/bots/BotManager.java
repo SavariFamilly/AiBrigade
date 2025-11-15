@@ -100,14 +100,21 @@ public class BotManager {
         AIBrigadeMod.LOGGER.info("Spawning bot at {} in group {} with behavior {}",
             pos, groupName, behavior);
 
+        // For STATIC bots, find the ground first so they don't float in mid-air
+        BlockPos spawnPos = pos;
+        if (isStatic) {
+            spawnPos = findGroundBelow(level, pos);
+            AIBrigadeMod.LOGGER.info("Static bot ground position found at Y={} (original Y={})", spawnPos.getY(), pos.getY());
+        }
+
         // Configure bot (NE PAS écraser le nom et skin déjà appliqués dans le constructeur)
-        bot.setPos(pos.getX(), pos.getY(), pos.getZ());
+        bot.setPos(spawnPos.getX(), spawnPos.getY(), spawnPos.getZ());
         // bot.setBotName() et bot.setBotSkin() sont déjà définis par le constructeur via MojangSkinFetcher
         bot.setBehaviorType(behavior);
         bot.setFollowRadius(radius);
         bot.setStatic(isStatic);
         bot.setBotGroup(groupName);
-        bot.setSpawnPosition(pos);
+        bot.setSpawnPosition(spawnPos);
 
         // Find and assign leader
         UUID leaderId = findLeaderUUID(level, leaderName);
@@ -819,6 +826,34 @@ public class BotManager {
         int offsetZ = (int) (Math.sin(angle) * radius);
 
         return center.offset(offsetX, 0, offsetZ);
+    }
+
+    /**
+     * Find ground below a position for static bot spawning
+     * Searches up to 256 blocks down, returns position ON TOP of solid ground
+     *
+     * @param level The world level
+     * @param startPos Starting position to search from
+     * @return BlockPos on top of ground, or original position if no ground found
+     */
+    private BlockPos findGroundBelow(ServerLevel level, BlockPos startPos) {
+        // Check if already on solid ground
+        BlockPos below = startPos.below();
+        if (com.aibrigade.utils.BlockHelper.isSolidBlock(level, below)) {
+            return startPos; // Already on ground
+        }
+
+        // Search down for solid block
+        BlockPos groundBlock = com.aibrigade.utils.BlockHelper.findGroundBelow(level, startPos, 256);
+
+        if (groundBlock != null) {
+            // Return position ON TOP of the solid block (above it)
+            return groundBlock.above();
+        }
+
+        // No ground found within 256 blocks, return original position
+        AIBrigadeMod.LOGGER.warn("No ground found below {} within 256 blocks, spawning at original position", startPos);
+        return startPos;
     }
 
     /**

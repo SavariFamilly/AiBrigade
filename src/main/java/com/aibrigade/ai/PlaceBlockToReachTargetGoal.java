@@ -40,6 +40,11 @@ public class PlaceBlockToReachTargetGoal extends Goal {
 
     @Override
     public boolean canUse() {
+        // Static bots should NOT place blocks
+        if (bot.isStatic()) {
+            return false;
+        }
+
         // Vérifier si la construction est autorisée
         if (!bot.canPlaceBlocks()) {
             return false;

@@ -193,11 +193,22 @@ public class BotEntity extends PathfinderMob {
         // Priorité 4: Place blocks to reach target (avec toggle canPlaceBlocks)
         this.goalSelector.addGoal(4, new PlaceBlockToReachTargetGoal(this));
 
-        // Priorité 5: Melee attack (for non-static bots)
+        // Priorité 5: Melee attack (works for both static and non-static bots)
         this.goalSelector.addGoal(5, new net.minecraft.world.entity.ai.goal.MeleeAttackGoal(this, 1.2D, false));
 
-        // Priorité 6: Wander when idle (only non-static bots)
-        this.goalSelector.addGoal(6, new net.minecraft.world.entity.ai.goal.WaterAvoidingRandomStrollGoal(this, 0.8D));
+        // Priorité 6: Wander when idle (ONLY for non-static bots, static bots stay in place)
+        // Note: We can't check isStatic() here since it's called in constructor
+        // The goal will be inactive for static bots since they won't have valid navigation
+        this.goalSelector.addGoal(6, new net.minecraft.world.entity.ai.goal.WaterAvoidingRandomStrollGoal(this, 0.8D) {
+            @Override
+            public boolean canUse() {
+                // Prevent wandering for static bots
+                if (BotEntity.this.isStatic()) {
+                    return false;
+                }
+                return super.canUse();
+            }
+        });
 
         // Priorité 7: Look at player (secondaire car ActiveGazeBehavior gère déjà)
         this.goalSelector.addGoal(7, new net.minecraft.world.entity.ai.goal.LookAtPlayerGoal(this, Player.class, 8.0F));
@@ -794,12 +805,12 @@ public class BotEntity extends PathfinderMob {
         // Stub: AI state updates will be handled by AIManager
         // This method can be used for quick state checks and transitions
 
-        if (isStatic()) {
-            // Static bots should not move
-            this.setNoAi(true);
-        } else {
-            this.setNoAi(false);
-        }
+        // NOTE: We do NOT use setNoAi(true) for static bots because:
+        // 1. It disables ALL AI including StaticBotDefenseGoal (hostile mob attacks)
+        // 2. It disables targetSelector goals (prevents targeting enemies)
+        // 3. Movement is already prevented by individual goals checking isStatic()
+        //
+        // Static bots can still use AI goals - they just won't move except for StaticBotDefenseGoal
     }
 
     // GeckoLib animation methods - will be restored when GeckoLib is available

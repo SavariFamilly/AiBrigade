@@ -82,7 +82,7 @@ public class RealisticFollowLeaderGoal extends Goal {
             this.chaseChance = 0.95f; // Suit activement presque toujours
         } else {
             this.behaviorType = FollowBehaviorType.RADIUS_BASED;
-            this.chaseChance = 0.3f; // Suit peu souvent, reste dans le radius
+            this.chaseChance = 0.85f; // Suit activement pour rester dans le radius
         }
 
         // Initialiser les comportements aléatoires
@@ -119,17 +119,14 @@ public class RealisticFollowLeaderGoal extends Goal {
             // Active follow: suit toujours le leader de près
             return distance > minFollowDistance;
         } else {
-            // Radius-based: reste dans le radius
-            // Si trop proche, ne pas suivre
+            // Radius-based: suit activement pour rester dans le radius
+            // Ne suit pas si trop proche du leader
             if (distance < minFollowDistance) {
                 return false;
             }
 
-            // Si dans le rayon et pas en train de chase, ne pas bouger
-            if (distance < maxFollowDistance && !isActivelyChasing) {
-                return false;
-            }
-
+            // Suit toujours pour se repositionner dans le radius (même si déjà dedans)
+            // Car chaque bot a sa position unique dans le radius
             return true;
         }
     }
@@ -193,12 +190,11 @@ public class RealisticFollowLeaderGoal extends Goal {
             updateChaseDecision();
         }
 
-        // Si pas en train de chase et dans le rayon, ne rien faire
         double distance = DistanceHelper.getDistance(bot, leader);
-        if (!isActivelyChasing && distance < maxFollowDistance) {
-            BotMovementHelper.stopMovement(bot);
-            return;
-        }
+
+        // Les deux types de bots doivent suivre activement:
+        // - ACTIVE_FOLLOW: très proche du leader
+        // - RADIUS_BASED: dans le radius défini (pas juste regarder)
 
         // === 2. Pause aléatoire ===
         if (isPaused) {

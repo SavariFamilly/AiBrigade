@@ -50,24 +50,25 @@ public class BotPlayerSkinRenderer extends LivingEntityRenderer<BotEntity, Playe
 
     /**
      * Récupère la texture (skin) pour ce bot
-     * Utilise le GameProfile si disponible, sinon fallback
+     * Utilise les données de texture synchronisées via EntityData
      */
     @Override
     public ResourceLocation getTextureLocation(BotEntity bot) {
         UUID playerUUID = bot.getPlayerUUID();
+        String textureValue = bot.getSkinTextureValue();
+        String textureSignature = bot.getSkinTextureSignature();
 
-        if (playerUUID == null) {
+        // Si pas d'UUID ou pas de données de texture, utiliser skin par défaut
+        if (playerUUID == null || textureValue.isEmpty()) {
             return DEFAULT_STEVE_SKIN;
         }
 
-        // Récupérer le GameProfile depuis le cache
-        GameProfile profile = MojangSkinFetcher.getCachedProfile(playerUUID);
-
-        if (profile == null) {
-            // Si pas en cache, utiliser le skin par défaut
-            // La récupération asynchrone se fait en arrière-plan
-            return DEFAULT_STEVE_SKIN;
-        }
+        // Reconstruire un GameProfile avec les propriétés de texture
+        GameProfile profile = new GameProfile(playerUUID, bot.getBotName());
+        // La signature peut être null/vide pour certains serveurs non-authentifiés
+        String signature = (textureSignature != null && !textureSignature.isEmpty()) ? textureSignature : null;
+        profile.getProperties().put("textures",
+            new com.mojang.authlib.properties.Property("textures", textureValue, signature));
 
         // Convertir le GameProfile en ResourceLocation pour le skin
         return getSkinLocation(profile);

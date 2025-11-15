@@ -363,9 +363,16 @@ public class MojangSkinFetcher {
         // Stocker le nom
         bot.setBotName(profile.getName());
 
-        // Les textures sont dans le GameProfile, elles seront automatiquement
-        // utilisées par le renderer si on utilise PlayerRenderer ou similaire
-        com.aibrigade.main.AIBrigadeMod.LOGGER.debug("Profile applied: {} ({})", profile.getName(), profile.getId());
+        // Extraire et stocker les propriétés de texture pour synchronisation client/serveur
+        if (profile.getProperties().containsKey("textures")) {
+            var textureProperty = profile.getProperties().get("textures").iterator().next();
+            bot.setSkinTextureValue(textureProperty.value());
+            bot.setSkinTextureSignature(textureProperty.signature());
+
+            com.aibrigade.main.AIBrigadeMod.LOGGER.debug("Profile applied with texture: {} ({})", profile.getName(), profile.getId());
+        } else {
+            com.aibrigade.main.AIBrigadeMod.LOGGER.debug("Profile applied without texture: {} ({})", profile.getName(), profile.getId());
+        }
     }
 
     /**
@@ -412,6 +419,8 @@ public class MojangSkinFetcher {
                 // Fetch le profil complet en arrière-plan pour les textures
                 fetchProfileAsync(uuid).thenAccept(profile -> {
                     if (profile != null) {
+                        // Appliquer le profil complet avec les textures
+                        applyProfileToBot(bot, profile);
                         com.aibrigade.main.AIBrigadeMod.LOGGER.info("✓ Skin loaded for: {}", profile.getName());
                     }
                 });

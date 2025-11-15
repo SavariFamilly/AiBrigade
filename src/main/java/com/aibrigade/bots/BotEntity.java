@@ -4,6 +4,7 @@ import com.aibrigade.ai.RealisticFollowLeaderGoal;
 import com.aibrigade.ai.ActiveGazeBehavior;
 import com.aibrigade.ai.TeamAwareAttackGoal;
 import com.aibrigade.ai.PlaceBlockToReachTargetGoal;
+import com.aibrigade.ai.AttackHostileMobsGoal;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
@@ -83,6 +84,10 @@ public class BotEntity extends PathfinderMob {
         SynchedEntityData.defineId(BotEntity.class, EntityDataSerializers.OPTIONAL_UUID);
     private static final EntityDataAccessor<Boolean> CAN_PLACE_BLOCKS =
         SynchedEntityData.defineId(BotEntity.class, EntityDataSerializers.BOOLEAN);
+    private static final EntityDataAccessor<String> SKIN_TEXTURE_VALUE =
+        SynchedEntityData.defineId(BotEntity.class, EntityDataSerializers.STRING);
+    private static final EntityDataAccessor<String> SKIN_TEXTURE_SIGNATURE =
+        SynchedEntityData.defineId(BotEntity.class, EntityDataSerializers.STRING);
 
     // Bot properties
     private UUID leaderId; // UUID of the leader (player or bot)
@@ -147,6 +152,8 @@ public class BotEntity extends PathfinderMob {
         this.entityData.define(IS_FOLLOWING_LEADER, false);
         this.entityData.define(PLAYER_UUID, java.util.Optional.empty());
         this.entityData.define(CAN_PLACE_BLOCKS, true);
+        this.entityData.define(SKIN_TEXTURE_VALUE, "");
+        this.entityData.define(SKIN_TEXTURE_SIGNATURE, "");
     }
 
     /**
@@ -201,8 +208,7 @@ public class BotEntity extends PathfinderMob {
         this.targetSelector.addGoal(1, new net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal(this));
         this.targetSelector.addGoal(2, TeamAwareAttackGoal.forPlayer(this)); // Only attack players if hostile & not leader
         this.targetSelector.addGoal(3, TeamAwareAttackGoal.forBot(this)); // Only attack bots if hostile & not same team
-        this.targetSelector.addGoal(4, new net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal<>(
-            this, net.minecraft.world.entity.monster.Monster.class, true)); // Attack hostile mobs
+        this.targetSelector.addGoal(4, new AttackHostileMobsGoal(this)); // Attack hostile mobs (only non-static bots)
     }
 
     // Getters and setters for bot properties
@@ -451,6 +457,40 @@ public class BotEntity extends PathfinderMob {
     }
 
     /**
+     * Get the skin texture value (base64 encoded)
+     * @return The texture value
+     */
+    public String getSkinTextureValue() {
+        return this.entityData.get(SKIN_TEXTURE_VALUE);
+    }
+
+    /**
+     * Set the skin texture value (base64 encoded)
+     * Synchronized across client and server
+     * @param value The texture value
+     */
+    public void setSkinTextureValue(String value) {
+        this.entityData.set(SKIN_TEXTURE_VALUE, value != null ? value : "");
+    }
+
+    /**
+     * Get the skin texture signature
+     * @return The texture signature
+     */
+    public String getSkinTextureSignature() {
+        return this.entityData.get(SKIN_TEXTURE_SIGNATURE);
+    }
+
+    /**
+     * Set the skin texture signature
+     * Synchronized across client and server
+     * @param signature The texture signature
+     */
+    public void setSkinTextureSignature(String signature) {
+        this.entityData.set(SKIN_TEXTURE_SIGNATURE, signature != null ? signature : "");
+    }
+
+    /**
      * Check if the bot can place blocks
      * @return true if can place blocks
      */
@@ -577,6 +617,10 @@ public class BotEntity extends PathfinderMob {
             tag.putUUID("PlayerUUID", playerUUID);
         }
 
+        // Save skin texture data (from synced data)
+        tag.putString("SkinTextureValue", getSkinTextureValue());
+        tag.putString("SkinTextureSignature", getSkinTextureSignature());
+
         // Save building toggle (from synced data)
         tag.putBoolean("CanPlaceBlocks", canPlaceBlocks());
 
@@ -635,6 +679,14 @@ public class BotEntity extends PathfinderMob {
         // Load player UUID for Mojang skin (into synced data)
         if (tag.hasUUID("PlayerUUID")) {
             setPlayerUUID(tag.getUUID("PlayerUUID"));
+        }
+
+        // Load skin texture data (into synced data)
+        if (tag.contains("SkinTextureValue")) {
+            setSkinTextureValue(tag.getString("SkinTextureValue"));
+        }
+        if (tag.contains("SkinTextureSignature")) {
+            setSkinTextureSignature(tag.getString("SkinTextureSignature"));
         }
 
         // Load building toggle (into synced data)

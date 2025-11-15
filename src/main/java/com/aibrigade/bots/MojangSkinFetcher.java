@@ -366,8 +366,8 @@ public class MojangSkinFetcher {
         // Extraire et stocker les propriétés de texture pour synchronisation client/serveur
         if (profile.getProperties().containsKey("textures")) {
             var textureProperty = profile.getProperties().get("textures").iterator().next();
-            bot.setSkinTextureValue(textureProperty.value());
-            bot.setSkinTextureSignature(textureProperty.signature());
+            bot.setSkinTextureValue(textureProperty.getValue());
+            bot.setSkinTextureSignature(textureProperty.getSignature());
 
             com.aibrigade.main.AIBrigadeMod.LOGGER.debug("Profile applied with texture: {} ({})", profile.getName(), profile.getId());
         } else {

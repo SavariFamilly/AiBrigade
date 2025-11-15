@@ -15,6 +15,13 @@
 - **Persistent data**: bot configurations saved between sessions
 - **Performance optimized**: multithreaded AI processing
 
+### Mojang Skin System
+- **Real player skins**: Bots automatically receive skins from real Minecraft players via Mojang API
+- **30+ famous players**: Random selection from professional players, streamers, and content creators
+- **Unique names**: Each bot has a unique name to prevent conflicts
+- **Dynamic skin changes**: Change bot name to get a different player's skin
+- **Async loading**: Skins load asynchronously without impacting game performance
+
 ### Bot Capabilities
 - Follow assigned leader (player or another bot)
 - Maintain formation while following
@@ -22,6 +29,9 @@
 - Patrol designated areas with waypoints
 - Guard specific positions
 - Climb obstacles and navigate complex terrain
+- **Place blocks to reach targets** (bridges, towers, stairs)
+- **Build escape routes** when trapped
+- **Intelligent pathfinding** with block placement
 - Disperse to avoid clustering
 - Coordinate actions with group members
 
@@ -186,6 +196,23 @@ Example:
 /aibrigade setradius AlphaSquad 20.0
 ```
 
+**Enable/disable follow leader:**
+```
+/aibrigade followleader <groupName> <enabled> <radius>
+```
+
+Example:
+```
+/aibrigade followleader AlphaSquad true 15.0
+```
+
+**Follow Behavior:**
+- **5/6 of bots** (radius-based): Follow leader until within configured radius, then stop
+- **1/6 of bots** (active follow): Follow leader very closely (3 blocks minimum)
+- **Static bots**: Only look at leader, do not move (except to attack hostile mobs)
+
+Note: Use `/aibrigade assignleader` first to assign a leader to the group.
+
 **Toggle static state:**
 ```
 /aibrigade togglestatic <target>
@@ -194,6 +221,22 @@ Example:
 Example:
 ```
 /aibrigade togglestatic AlphaSquad
+```
+
+**Toggle jumping behavior:**
+```
+/aibrigade togglejump <target>
+```
+
+Modes:
+- **Random jumps**: Bots jump every 2-30 minutes at random intervals (default)
+- **Forced continuous jumps**: Bots jump continuously like bunny hopping (when toggled on)
+
+Example:
+```
+/aibrigade togglejump AlphaSquad
+# Toggle on: continuous jumping
+# Toggle again: back to random jumps
 ```
 
 #### Information Commands
@@ -218,6 +261,65 @@ Example:
 /aibrigade help
 ```
 
+#### Individual Bot Management
+
+**Kill a specific bot:**
+```
+/aibrigade kill <botName>
+```
+
+Example:
+```
+/aibrigade kill BotSoldier_1
+```
+
+**Modify individual bot:**
+
+Change bot name (fetches Mojang skin automatically):
+```
+/aibrigade modify <botName> name <newName>
+```
+
+Example:
+```
+/aibrigade modify BotSoldier_1 name Technoblade
+# Bot will receive Technoblade's skin from Mojang API
+```
+
+Set item in main hand:
+```
+/aibrigade modify <botName> hand <item>
+```
+
+Example:
+```
+/aibrigade modify BotSoldier_1 hand diamond_sword
+```
+
+Set item in off-hand:
+```
+/aibrigade modify <botName> offhand <item>
+```
+
+Example:
+```
+/aibrigade modify BotSoldier_1 offhand oak_planks
+```
+
+Set armor piece:
+```
+/aibrigade modify <botName> armor <slot> <item>
+```
+
+Slots: `head`, `chest`, `legs`, `feet`
+
+Example:
+```
+/aibrigade modify BotSoldier_1 armor head diamond_helmet
+```
+
+**Note:** Bot names are unique. If you spawn a bot with a name that already exists, it will be automatically renamed with a suffix (e.g., BotSoldier_1, BotSoldier_2).
+
 #### Cleanup Commands
 
 **Remove a bot:**
@@ -234,23 +336,33 @@ Example:
 
 ### Follow
 - Bots follow assigned leader within radius
+- Two follow modes:
+  - **Radius-based (5/6 bots)**: Follow until within configured radius, then stop
+  - **Active follow (1/6 bots)**: Follow very closely (3 blocks minimum)
 - Maintain spacing to avoid clustering
-- Mimic leader actions (jumping, climbing)
+- Static bots look at leader but don't move
 - Defend leader if attacked
 
-### Patrol
+### Static Guard (Static Bots)
+- **Stationary**: Bots stay at spawn position
+- **Look at leader**: Turn to face leader when followleader enabled
+- **Attack hostile mobs**: Automatically attack nearby monsters (16 block range)
+- **No movement**: Don't wander, jump randomly, or place blocks
+- **Ideal for base defense**
+
+### Patrol (Coming Soon)
 - Bots patrol around home position
 - Move between random waypoints
 - Attack threats that come near
 - Return to patrol after combat
 
-### Raid
+### Raid (Coming Soon)
 - Aggressive behavior
 - Attack nearby entities and structures
 - Break blocks if configured
 - Collect loot from kills
 
-### Guard
+### Guard (Coming Soon)
 - Defensive behavior
 - Stay near guard position
 - Scan surroundings for threats
@@ -258,9 +370,11 @@ Example:
 
 ### Idle
 - Default passive behavior
-- Minimal movement
+- Minimal movement (random wandering)
 - Look around occasionally
 - Low resource usage
+
+**Note:** Currently, patrol, raid, and guard behaviors use the basic follow/idle system. Specialized AI goals for these behaviors are planned for future updates.
 
 ## Configuration
 

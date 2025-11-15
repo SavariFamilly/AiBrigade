@@ -276,6 +276,43 @@ Test maximum bot capacity:
 /aibrigade removegroup Group3
 ```
 
+### Individual Bot Customization
+
+```
+# List all bots to find the name
+/aibrigade listbots
+
+# Get specific group info
+/aibrigade groupinfo AlphaSquad
+
+# Change bot name (automatically fetches new Mojang skin)
+/aibrigade modify BotSoldier_1 name Dream
+
+# Give diamond sword in main hand
+/aibrigade modify Dream hand diamond_sword
+
+# Give shield in off-hand
+/aibrigade modify Dream offhand shield
+
+# Give diamond helmet
+/aibrigade modify Dream armor head diamond_helmet
+
+# Give diamond chestplate
+/aibrigade modify Dream armor chest diamond_chestplate
+
+# Give diamond leggings
+/aibrigade modify Dream armor legs diamond_leggings
+
+# Give diamond boots
+/aibrigade modify Dream armor feet diamond_boots
+
+# Enable continuous jumping (bunny hop)
+/aibrigade togglejump Dream
+
+# Kill specific bot
+/aibrigade kill Dream
+```
+
 ## Best Practices
 
 ### Performance Tips

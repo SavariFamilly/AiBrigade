@@ -55,14 +55,20 @@ public class BotPlayerSkinRenderer extends LivingEntityRenderer<BotEntity, Playe
     @Override
     public ResourceLocation getTextureLocation(BotEntity bot) {
         UUID playerUUID = bot.getPlayerUUID();
+        String botName = bot.getBotName();
+
+        // DEBUG LOG every 100 ticks (5 seconds)
+        if (bot.tickCount % 100 == 0) {
+            System.out.println("[BotSkinRenderer] Getting texture for bot: " + botName + ", UUID: " + playerUUID);
+        }
 
         if (playerUUID == null) {
+            System.out.println("[BotSkinRenderer] UUID is NULL for bot " + botName + ", using default Steve skin");
             return DEFAULT_STEVE_SKIN;
         }
 
         try {
             // Créer un GameProfile avec l'UUID et le nom du bot
-            String botName = bot.getBotName();
             if (botName == null || botName.isEmpty()) {
                 botName = "Bot";
             }
@@ -76,13 +82,20 @@ public class BotPlayerSkinRenderer extends LivingEntityRenderer<BotEntity, Playe
             // Enregistrer le profil pour charger les textures de manière asynchrone
             // Cela déclenche le téléchargement des textures si elles ne sont pas déjà en cache
             skinManager.registerSkins(profile, (type, location, texture) -> {
-                // Callback appelé quand la texture est chargée (ne fait rien ici, juste pour déclencher le chargement)
+                System.out.println("[BotSkinRenderer] Skin loaded callback for " + botName + ": " + location);
             }, true);
 
             // Récupérer le skin (sera le skin par défaut jusqu'à ce que le téléchargement soit terminé)
-            return skinManager.getInsecureSkinLocation(profile);
+            ResourceLocation skinLocation = skinManager.getInsecureSkinLocation(profile);
+
+            if (bot.tickCount % 100 == 0) {
+                System.out.println("[BotSkinRenderer] Returning skin location for " + botName + ": " + skinLocation);
+            }
+
+            return skinLocation;
         } catch (Exception e) {
-            System.err.println("[BotPlayerSkinRenderer] Error loading skin for UUID " + playerUUID + ": " + e.getMessage());
+            System.err.println("[BotPlayerSkinRenderer] Error loading skin for " + botName + " (UUID " + playerUUID + "): " + e.getMessage());
+            e.printStackTrace();
             return DEFAULT_STEVE_SKIN;
         }
     }

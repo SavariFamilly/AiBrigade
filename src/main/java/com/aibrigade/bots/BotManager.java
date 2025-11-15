@@ -84,6 +84,19 @@ public class BotManager {
         // - RandomEquipment.equipRandomItem(this)
         BotEntity bot = new BotEntity(ModEntities.BOT.get(), level);
 
+        // Wait briefly for async name to be set, then ensure uniqueness
+        // If name is already taken, append a number
+        int attempts = 0;
+        String originalName = bot.getBotName();
+        while (isBotNameTaken(bot.getBotName()) && attempts < 100) {
+            bot.setBotName(originalName + "_" + (attempts + 1));
+            attempts++;
+        }
+
+        if (attempts > 0) {
+            AIBrigadeMod.LOGGER.info("Bot name '{}' was taken, renamed to '{}'", originalName, bot.getBotName());
+        }
+
         AIBrigadeMod.LOGGER.info("Spawning bot at {} in group {} with behavior {}",
             pos, groupName, behavior);
 
@@ -1007,6 +1020,97 @@ public class BotManager {
      */
     public int getMaxBots() {
         return MAX_BOTS;
+    }
+
+    /**
+     * Get a bot by its name
+     * @param botName The bot's name
+     * @return The bot entity, or null if not found
+     */
+    public BotEntity getBotByName(String botName) {
+        for (BotEntity bot : activeBots.values()) {
+            if (bot.getBotName().equalsIgnoreCase(botName)) {
+                return bot;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Check if a bot name is already in use
+     * @param name The name to check
+     * @return true if name is taken, false otherwise
+     */
+    public boolean isBotNameTaken(String name) {
+        for (BotEntity bot : activeBots.values()) {
+            if (bot.getBotName().equalsIgnoreCase(name)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Kill a bot by its name
+     * @param botName The bot's name
+     * @return true if bot was found and killed, false otherwise
+     */
+    public boolean killBotByName(String botName) {
+        BotEntity bot = getBotByName(botName);
+        if (bot == null) {
+            return false;
+        }
+
+        // Remove from group
+        String groupId = bot.getGroupId();
+        if (groupId != null && botGroups.containsKey(groupId)) {
+            botGroups.get(groupId).removeBot(bot.getUUID());
+        }
+
+        // Remove from active bots
+        activeBots.remove(bot.getUUID());
+
+        // Kill the entity
+        bot.remove(net.minecraft.world.entity.Entity.RemovalReason.KILLED);
+
+        AIBrigadeMod.LOGGER.info("Killed bot: {}", botName);
+        return true;
+    }
+
+    /**
+     * Change a bot's name and fetch new Mojang skin
+     * @param bot The bot to rename
+     * @param newName The new name
+     * @return true if successful, false if name is taken
+     */
+    public boolean changeBotName(BotEntity bot, String newName) {
+        // Check if new name is already taken
+        if (isBotNameTaken(newName)) {
+            return false;
+        }
+
+        // Change the name
+        bot.setBotName(newName);
+
+        // Fetch new Mojang skin for this name
+        MojangSkinFetcher.getUUIDFromUsername(newName).thenAccept(uuid -> {
+            if (uuid != null) {
+                bot.setPlayerUUID(uuid);
+                AIBrigadeMod.LOGGER.info("Bot renamed to '{}' with UUID {}", newName, uuid);
+
+                // Fetch profile for skin
+                MojangSkinFetcher.fetchProfileAsync(uuid).thenAccept(profile -> {
+                    if (profile != null) {
+                        AIBrigadeMod.LOGGER.info("Skin loaded for renamed bot '{}'", profile.getName());
+                    }
+                });
+            } else {
+                AIBrigadeMod.LOGGER.warn("Could not find Mojang UUID for name '{}', using random UUID", newName);
+                bot.setPlayerUUID(UUID.randomUUID());
+            }
+        });
+
+        return true;
     }
 
     /**

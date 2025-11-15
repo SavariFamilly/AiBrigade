@@ -107,6 +107,26 @@ public class BotCommandHandler {
                 .then(Commands.argument("target", StringArgumentType.string())
                     .executes(BotCommandHandler::toggleJump)))
 
+            .then(Commands.literal("kill")
+                .then(Commands.argument("botName", StringArgumentType.string())
+                    .executes(BotCommandHandler::killBot)))
+
+            .then(Commands.literal("modify")
+                .then(Commands.argument("botName", StringArgumentType.string())
+                    .then(Commands.literal("name")
+                        .then(Commands.argument("newName", StringArgumentType.string())
+                            .executes(BotCommandHandler::modifyBotName)))
+                    .then(Commands.literal("hand")
+                        .then(Commands.argument("item", StringArgumentType.string())
+                            .executes(BotCommandHandler::modifyBotHand)))
+                    .then(Commands.literal("offhand")
+                        .then(Commands.argument("item", StringArgumentType.string())
+                            .executes(BotCommandHandler::modifyBotOffhand)))
+                    .then(Commands.literal("armor")
+                        .then(Commands.argument("slot", StringArgumentType.string())
+                            .then(Commands.argument("item", StringArgumentType.string())
+                                .executes(BotCommandHandler::modifyBotArmor))))))
+
             .then(Commands.literal("removebot")
                 .then(Commands.argument("botName", StringArgumentType.string())
                     .executes(BotCommandHandler::removeBot)))
@@ -657,6 +677,14 @@ public class BotCommandHandler {
             /aibrigade setradius <groupName> <radius>
             /aibrigade togglestatic <target>
             /aibrigade togglejump <target> - Toggle continuous jumping
+
+            === Individual Bot Commands ===
+            /aibrigade kill <botName> - Kill a specific bot
+            /aibrigade modify <botName> name <newName> - Rename bot & fetch Mojang skin
+            /aibrigade modify <botName> hand <item> - Set item in main hand
+            /aibrigade modify <botName> offhand <item> - Set item in offhand
+            /aibrigade modify <botName> armor <slot> <item> - Set armor (slot: head/chest/legs/feet)
+
             /aibrigade removebot <botName>
             /aibrigade removegroup <groupName>
             /aibrigade groupinfo <groupName>
@@ -666,9 +694,11 @@ public class BotCommandHandler {
 
             Behaviors: follow, patrol, raid, guard
             Armor materials: diamond, iron, chainmail, leather, gold, netherite
+            Items: Use format like "diamond_sword" or "minecraft:diamond_pickaxe"
             Equipment: Weighted distribution (20% nothing, 15% iron pickaxe, 10% diamond pickaxe,
                        20% cooked beef, 20% iron sword, 15% diamond sword)
 
+            Note: Bot names are unique - no two bots can have the same name
             Note: Dead bots are automatically cleaned every 5 seconds
             """;
 
@@ -677,6 +707,226 @@ public class BotCommandHandler {
             false);
 
         return 1;
+    }
+
+    /**
+     * Command: /aibrigade kill <botName>
+     * Kills a specific bot by name
+     */
+    private static int killBot(CommandContext<CommandSourceStack> context) {
+        String botName = StringArgumentType.getString(context, "botName");
+        BotManager botManager = AIBrigadeMod.getBotManager();
+
+        if (botManager == null) {
+            context.getSource().sendFailure(Component.literal("Bot manager not initialized"));
+            return 0;
+        }
+
+        boolean success = botManager.killBotByName(botName);
+
+        if (success) {
+            context.getSource().sendSuccess(() ->
+                Component.literal("§aBot '" + botName + "' has been killed"),
+                true);
+            return 1;
+        } else {
+            context.getSource().sendFailure(Component.literal("§cBot '" + botName + "' not found"));
+            return 0;
+        }
+    }
+
+    /**
+     * Command: /aibrigade modify <botName> name <newName>
+     * Changes a bot's name and fetches new Mojang skin
+     */
+    private static int modifyBotName(CommandContext<CommandSourceStack> context) {
+        String botName = StringArgumentType.getString(context, "botName");
+        String newName = StringArgumentType.getString(context, "newName");
+        BotManager botManager = AIBrigadeMod.getBotManager();
+
+        if (botManager == null) {
+            context.getSource().sendFailure(Component.literal("Bot manager not initialized"));
+            return 0;
+        }
+
+        BotEntity bot = botManager.getBotByName(botName);
+        if (bot == null) {
+            context.getSource().sendFailure(Component.literal("§cBot '" + botName + "' not found"));
+            return 0;
+        }
+
+        boolean success = botManager.changeBotName(bot, newName);
+
+        if (success) {
+            context.getSource().sendSuccess(() ->
+                Component.literal("§aBot renamed from '" + botName + "' to '" + newName + "' (fetching Mojang skin...)"),
+                true);
+            return 1;
+        } else {
+            context.getSource().sendFailure(Component.literal("§cName '" + newName + "' is already taken by another bot"));
+            return 0;
+        }
+    }
+
+    /**
+     * Command: /aibrigade modify <botName> hand <item>
+     * Sets item in bot's main hand
+     */
+    private static int modifyBotHand(CommandContext<CommandSourceStack> context) {
+        String botName = StringArgumentType.getString(context, "botName");
+        String itemName = StringArgumentType.getString(context, "item");
+        BotManager botManager = AIBrigadeMod.getBotManager();
+
+        if (botManager == null) {
+            context.getSource().sendFailure(Component.literal("Bot manager not initialized"));
+            return 0;
+        }
+
+        BotEntity bot = botManager.getBotByName(botName);
+        if (bot == null) {
+            context.getSource().sendFailure(Component.literal("§cBot '" + botName + "' not found"));
+            return 0;
+        }
+
+        // Parse item from string (e.g., "minecraft:diamond_sword", "diamond_sword", etc.)
+        ItemStack itemStack = parseItemStack(itemName);
+        if (itemStack.isEmpty()) {
+            context.getSource().sendFailure(Component.literal("§cInvalid item: '" + itemName + "'"));
+            return 0;
+        }
+
+        bot.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND, itemStack);
+
+        context.getSource().sendSuccess(() ->
+            Component.literal("§aSet " + itemStack.getDisplayName().getString() + " in " + botName + "'s main hand"),
+            true);
+
+        return 1;
+    }
+
+    /**
+     * Command: /aibrigade modify <botName> offhand <item>
+     * Sets item in bot's offhand
+     */
+    private static int modifyBotOffhand(CommandContext<CommandSourceStack> context) {
+        String botName = StringArgumentType.getString(context, "botName");
+        String itemName = StringArgumentType.getString(context, "item");
+        BotManager botManager = AIBrigadeMod.getBotManager();
+
+        if (botManager == null) {
+            context.getSource().sendFailure(Component.literal("Bot manager not initialized"));
+            return 0;
+        }
+
+        BotEntity bot = botManager.getBotByName(botName);
+        if (bot == null) {
+            context.getSource().sendFailure(Component.literal("§cBot '" + botName + "' not found"));
+            return 0;
+        }
+
+        ItemStack itemStack = parseItemStack(itemName);
+        if (itemStack.isEmpty()) {
+            context.getSource().sendFailure(Component.literal("§cInvalid item: '" + itemName + "'"));
+            return 0;
+        }
+
+        bot.setItemInHand(net.minecraft.world.InteractionHand.OFF_HAND, itemStack);
+
+        context.getSource().sendSuccess(() ->
+            Component.literal("§aSet " + itemStack.getDisplayName().getString() + " in " + botName + "'s offhand"),
+            true);
+
+        return 1;
+    }
+
+    /**
+     * Command: /aibrigade modify <botName> armor <slot> <item>
+     * Sets armor piece in specified slot (head, chest, legs, feet)
+     */
+    private static int modifyBotArmor(CommandContext<CommandSourceStack> context) {
+        String botName = StringArgumentType.getString(context, "botName");
+        String slotName = StringArgumentType.getString(context, "slot");
+        String itemName = StringArgumentType.getString(context, "item");
+        BotManager botManager = AIBrigadeMod.getBotManager();
+
+        if (botManager == null) {
+            context.getSource().sendFailure(Component.literal("Bot manager not initialized"));
+            return 0;
+        }
+
+        BotEntity bot = botManager.getBotByName(botName);
+        if (bot == null) {
+            context.getSource().sendFailure(Component.literal("§cBot '" + botName + "' not found"));
+            return 0;
+        }
+
+        // Parse armor slot
+        net.minecraft.world.entity.EquipmentSlot slot;
+        switch (slotName.toLowerCase()) {
+            case "head":
+            case "helmet":
+                slot = net.minecraft.world.entity.EquipmentSlot.HEAD;
+                break;
+            case "chest":
+            case "chestplate":
+                slot = net.minecraft.world.entity.EquipmentSlot.CHEST;
+                break;
+            case "legs":
+            case "leggings":
+                slot = net.minecraft.world.entity.EquipmentSlot.LEGS;
+                break;
+            case "feet":
+            case "boots":
+                slot = net.minecraft.world.entity.EquipmentSlot.FEET;
+                break;
+            default:
+                context.getSource().sendFailure(Component.literal("§cInvalid armor slot: '" + slotName + "'. Use: head, chest, legs, feet"));
+                return 0;
+        }
+
+        ItemStack itemStack = parseItemStack(itemName);
+        if (itemStack.isEmpty()) {
+            context.getSource().sendFailure(Component.literal("§cInvalid item: '" + itemName + "'"));
+            return 0;
+        }
+
+        bot.setItemSlot(slot, itemStack);
+
+        context.getSource().sendSuccess(() ->
+            Component.literal("§aSet " + itemStack.getDisplayName().getString() + " in " + botName + "'s " + slotName + " slot"),
+            true);
+
+        return 1;
+    }
+
+    /**
+     * Helper: Parse item string to ItemStack
+     * Supports formats: "minecraft:diamond_sword", "diamond_sword", etc.
+     */
+    private static ItemStack parseItemStack(String itemName) {
+        try {
+            // Try to get item from registry
+            net.minecraft.resources.ResourceLocation itemId;
+
+            if (itemName.contains(":")) {
+                // Format: "minecraft:diamond_sword"
+                String[] parts = itemName.split(":");
+                itemId = new net.minecraft.resources.ResourceLocation(parts[0], parts[1]);
+            } else {
+                // Format: "diamond_sword" - assume minecraft namespace
+                itemId = new net.minecraft.resources.ResourceLocation("minecraft", itemName);
+            }
+
+            net.minecraft.world.item.Item item = net.minecraftforge.registries.ForgeRegistries.ITEMS.getValue(itemId);
+
+            if (item != null && item != Items.AIR) {
+                return new ItemStack(item);
+            }
+        } catch (Exception e) {
+            // Invalid format or item doesn't exist
+        }
+
+        return ItemStack.EMPTY;
     }
 
 }

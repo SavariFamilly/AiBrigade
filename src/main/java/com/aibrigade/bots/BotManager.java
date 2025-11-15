@@ -419,9 +419,10 @@ public class BotManager {
      * @param groupName Group name
      * @param enabled true to enable following, false to disable
      * @param radius Follow radius for the group
+     * @param leaderId UUID of the leader to follow (can be null if disabling)
      * @return true if successful, false if group not found
      */
-    public boolean setFollowLeader(String groupName, boolean enabled, float radius) {
+    public boolean setFollowLeader(String groupName, boolean enabled, float radius, @javax.annotation.Nullable UUID leaderId) {
         // Check if target is a group
         if (botGroups.containsKey(groupName)) {
             BotGroup group = botGroups.get(groupName);
@@ -443,6 +444,14 @@ public class BotManager {
                 if (bot != null) {
                     bot.setFollowingLeader(enabled);
                     bot.setFollowRadius(radius);
+
+                    // CRITICAL: Set the leader ID so bots know who to follow
+                    if (enabled && leaderId != null) {
+                        bot.setLeaderId(leaderId);
+                    } else {
+                        bot.setLeaderId(null);
+                    }
+
                     count++;
 
                     // Les probabilités sont déjà assignées dans RealisticFollowLeaderGoal
@@ -479,8 +488,8 @@ public class BotManager {
      */
     @Deprecated
     public boolean setFollowLeader(String targetName, boolean enabled) {
-        // Use default radius of 10.0f
-        return setFollowLeader(targetName, enabled, 10.0f);
+        // Use default radius of 10.0f and no leader ID
+        return setFollowLeader(targetName, enabled, 10.0f, null);
     }
 
     /**

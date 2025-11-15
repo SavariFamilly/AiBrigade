@@ -299,7 +299,20 @@ public class BotCommandHandler {
             return 0;
         }
 
-        boolean success = botManager.setFollowLeader(groupName, enabled, radius);
+        // Get the player executing the command to set them as leader
+        java.util.UUID leaderId = null;
+        try {
+            net.minecraft.world.entity.player.Player player = context.getSource().getPlayerOrException();
+            leaderId = player.getUUID();
+        } catch (net.minecraft.commands.CommandRuntimeException e) {
+            // Command not executed by a player - use null leader ID
+            if (enabled) {
+                context.getSource().sendFailure(Component.literal("Follow leader must be executed by a player"));
+                return 0;
+            }
+        }
+
+        boolean success = botManager.setFollowLeader(groupName, enabled, radius, leaderId);
 
         if (success) {
             context.getSource().sendSuccess(() ->

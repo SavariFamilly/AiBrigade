@@ -2,6 +2,7 @@ package com.aibrigade.commands;
 
 import com.aibrigade.main.AIBrigadeMod;
 import com.aibrigade.bots.BotManager;
+import com.aibrigade.bots.BotEntity;
 import com.aibrigade.ai.AIManager;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
@@ -16,6 +17,8 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 
 /**
  * BotCommandHandler - Handles all /aibrigade commands

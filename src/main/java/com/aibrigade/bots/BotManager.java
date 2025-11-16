@@ -266,9 +266,15 @@ public class BotManager {
         for (UUID botId : new HashSet<>(group.getBotIds())) {
             BotEntity bot = activeBots.get(botId);
             if (bot != null) {
-                // TODO: Find leader UUID and assign
-                // UUID leaderId = findLeaderUUID(bot.level(), leaderName);
-                // bot.setLeaderId(leaderId);
+                UUID leaderId = findLeaderUUID(bot.level(), leaderName);
+                if (leaderId != null) {
+                    bot.setLeaderId(leaderId);
+                    AIBrigadeMod.LOGGER.info("Assigned leader {} (UUID: {}) to bot {}",
+                        leaderName, leaderId, bot.getBotName());
+                } else {
+                    AIBrigadeMod.LOGGER.warn("Leader {} not found in world for bot {}",
+                        leaderName, bot.getBotName());
+                }
             }
         }
 
@@ -443,6 +449,22 @@ public class BotManager {
                 if (bot != null) {
                     bot.setFollowingLeader(enabled);
                     bot.setFollowRadius(radius);
+
+                    // CRITICAL FIX: Set the leader ID from the group's leader
+                    if (enabled && group.getLeaderName() != null && !group.getLeaderName().isEmpty()) {
+                        UUID leaderId = findLeaderUUID(bot.level(), group.getLeaderName());
+                        if (leaderId != null) {
+                            bot.setLeaderId(leaderId);
+                            AIBrigadeMod.LOGGER.info("Bot {} now following leader {} (UUID: {})",
+                                bot.getBotName(), group.getLeaderName(), leaderId);
+                        } else {
+                            AIBrigadeMod.LOGGER.warn("Leader {} not found for bot {}",
+                                group.getLeaderName(), bot.getBotName());
+                        }
+                    } else if (!enabled) {
+                        bot.setLeaderId(null); // Clear leader when disabled
+                    }
+
                     count++;
 
                     // Les probabilités sont déjà assignées dans RealisticFollowLeaderGoal
@@ -467,6 +489,30 @@ public class BotManager {
 
         AIBrigadeMod.LOGGER.warn("Group '{}' not found", groupName);
         return false;
+    }
+
+    /**
+     * Find a leader entity by name (player or bot) in the world
+     */
+    private UUID findLeaderUUID(net.minecraft.world.level.Level level, String leaderName) {
+        // Check if it's a player
+        for (net.minecraft.server.level.ServerPlayer player : level.getServer().getPlayerList().getPlayers()) {
+            if (player.getGameProfile().getName().equalsIgnoreCase(leaderName)) {
+                AIBrigadeMod.LOGGER.info("Found leader player: {} (UUID: {})", leaderName, player.getUUID());
+                return player.getUUID();
+            }
+        }
+
+        // Check if it's a bot
+        for (BotEntity bot : activeBots.values()) {
+            if (bot.getBotName().equalsIgnoreCase(leaderName)) {
+                AIBrigadeMod.LOGGER.info("Found leader bot: {} (UUID: {})", leaderName, bot.getUUID());
+                return bot.getUUID();
+            }
+        }
+
+        AIBrigadeMod.LOGGER.warn("Leader {} not found in world", leaderName);
+        return null;
     }
 
     /**

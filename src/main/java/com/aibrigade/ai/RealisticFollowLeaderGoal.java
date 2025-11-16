@@ -224,32 +224,17 @@ public class RealisticFollowLeaderGoal extends Goal {
         }
 
         // === 5. Recalcul de la position cible ===
-        recalculatePathTimer--;
-        if (recalculatePathTimer <= 0 || targetPosition == null) {
-            // Position différente selon le type de comportement
-            if (behaviorType == FollowBehaviorType.ACTIVE_FOLLOW) {
-                // Active follow: vise une position très proche du leader
-                targetPosition = calculateClosePosition(leader);
-            } else {
-                // Radius-based: vise une position dans le radius
-                targetPosition = calculateSpreadPosition(leader);
-            }
-            recalculatePathTimer = BotAIConstants.PATH_RECALC_INTERVAL_TICKS;
+        // Recalculer CHAQUE tick pour un suivi fluide du leader
+        // Position différente selon le type de comportement
+        if (behaviorType == FollowBehaviorType.ACTIVE_FOLLOW) {
+            // Active follow: vise une position très proche du leader
+            targetPosition = calculateClosePosition(leader);
+        } else {
+            // Radius-based: vise une position dans le radius
+            targetPosition = calculateSpreadPosition(leader);
         }
 
-        // === 6. Vérifier si le bot est déjà à sa position cible ===
-        Vec3 botPos = bot.position();
-        double distanceToTarget = botPos.distanceTo(targetPosition);
-
-        // Si déjà à la position cible (dans un rayon de 1.5 blocs), ne pas bouger
-        if (distanceToTarget < 1.5 && behaviorType == FollowBehaviorType.RADIUS_BASED && !isActivelyChasing) {
-            BotMovementHelper.stopMovement(bot);
-            // Continuer à regarder le leader
-            BotLookHelper.lookAtEntity(bot, leader, BotAIConstants.LOOK_YAW_SPEED_FAST, BotAIConstants.LOOK_PITCH_SPEED_FAST);
-            return;
-        }
-
-        // === 7. Appliquer la trajectoire courbe ===
+        // === 6. Appliquer la trajectoire courbe ===
         Vec3 curvedTarget = applyCurveToPath(targetPosition);
 
         // === 8. Déplacement ===

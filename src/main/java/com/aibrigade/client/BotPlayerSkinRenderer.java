@@ -51,7 +51,7 @@ public class BotPlayerSkinRenderer extends LivingEntityRenderer<BotEntity, Playe
 
     /**
      * Récupère la texture (skin) pour ce bot
-     * Utilise le système de Minecraft pour télécharger automatiquement les skins Mojang
+     * Charge automatiquement les skins Mojang depuis les serveurs via le SkinManager
      */
     @Override
     public ResourceLocation getTextureLocation(BotEntity bot) {
@@ -63,46 +63,29 @@ public class BotPlayerSkinRenderer extends LivingEntityRenderer<BotEntity, Playe
         }
 
         try {
-            // Créer un GameProfile avec l'UUID et le nom
             if (botName == null || botName.isEmpty()) {
                 botName = "Bot";
             }
 
-            // Variable finale pour utilisation dans les lambdas
-            final String finalBotName = botName;
-
             GameProfile profile = new GameProfile(playerUUID, botName);
-
-            // Obtenir le Minecraft client et les services
             Minecraft minecraft = Minecraft.getInstance();
 
-            // Charger le profil complet depuis les serveurs Mojang (une seule fois)
+            // Utiliser registerSkins pour charger le profil complet depuis Mojang
+            // C'est la méthode que Minecraft utilise pour les vrais joueurs
             if (!SKIN_LOAD_INITIATED.containsKey(playerUUID)) {
                 SKIN_LOAD_INITIATED.put(playerUUID, true);
 
-                System.out.println("[BotSkinRenderer] Initiating skin load for " + finalBotName + " (UUID: " + playerUUID + ")");
-
-                // Utiliser le SessionService pour remplir le profil avec les propriétés de texture
-                MinecraftSessionService sessionService = minecraft.getMinecraftSessionService();
-
-                // Lancer le téléchargement du profil de manière asynchrone
-                Minecraft.getInstance().execute(() -> {
-                    try {
-                        GameProfile completeProfile = sessionService.fillProfileProperties(profile, false);
-                        System.out.println("[BotSkinRenderer] Profile loaded for " + finalBotName +
-                            ", has textures: " + !completeProfile.getProperties().isEmpty());
-                    } catch (Exception e) {
-                        System.err.println("[BotSkinRenderer] Failed to load profile for " + finalBotName + ": " + e.getMessage());
-                    }
-                });
+                // registerSkins télécharge automatiquement les textures depuis Mojang
+                minecraft.getSkinManager().registerSkins(profile, (type, location, profileTexture) -> {
+                    // Ce callback est appelé quand la texture est chargée
+                    // Le SkinManager cache automatiquement la texture
+                }, true);
             }
 
-            // Utiliser le SkinManager pour obtenir le skin
-            // Il utilisera le profil complet une fois téléchargé
+            // Retourner la texture (sera Steve jusqu'à ce que le téléchargement soit terminé)
             return minecraft.getSkinManager().getInsecureSkinLocation(profile);
 
         } catch (Exception e) {
-            System.err.println("[BotSkinRenderer] Error getting skin for " + botName + ": " + e.getMessage());
             return DEFAULT_STEVE_SKIN;
         }
     }

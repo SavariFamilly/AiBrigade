@@ -3,7 +3,9 @@ package com.aibrigade.client;
 import com.aibrigade.bots.BotEntity;
 import com.aibrigade.bots.MojangSkinFetcher;
 import com.mojang.authlib.GameProfile;
+import com.mojang.authlib.minecraft.MinecraftSessionService;
 import com.mojang.blaze3d.vertex.PoseStack;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.model.HumanoidModel;
 import net.minecraft.client.model.PlayerModel;
 import net.minecraft.client.model.geom.ModelLayers;
@@ -15,23 +17,22 @@ import net.minecraft.client.resources.DefaultPlayerSkin;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Player;
 
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * BotPlayerSkinRenderer - Renderer personnalisé qui affiche les vrais skins Mojang
  *
- * Ce renderer utilise le GameProfile récupéré via MojangSkinFetcher pour afficher
- * le skin du joueur associé à l'UUID du bot.
- *
- * Fonctionnalités:
- * - Affichage du skin Mojang depuis GameProfile
- * - Fallback vers skin par défaut si UUID invalide
- * - Support des couches de rendu (armor, items, etc.)
- * - Modèle de joueur avec animations
+ * Ce renderer utilise le système de skins de Minecraft pour télécharger et afficher
+ * automatiquement les skins associés aux UUIDs des joueurs.
  */
 public class BotPlayerSkinRenderer extends LivingEntityRenderer<BotEntity, PlayerModel<BotEntity>> {
 
     private static final ResourceLocation DEFAULT_STEVE_SKIN = DefaultPlayerSkin.getDefaultSkin();
+
+    // Cache pour éviter de télécharger les skins constamment
+    private static final Map<UUID, Boolean> SKIN_LOAD_INITIATED = new ConcurrentHashMap<>();
 
     public BotPlayerSkinRenderer(EntityRendererProvider.Context context) {
         super(context, new PlayerModel<>(context.bakeLayer(ModelLayers.PLAYER), false), 0.5F);
@@ -50,55 +51,55 @@ public class BotPlayerSkinRenderer extends LivingEntityRenderer<BotEntity, Playe
 
     /**
      * Récupère la texture (skin) pour ce bot
-     * Utilise le GameProfile si disponible, sinon fallback
+     * Utilise le système de Minecraft pour télécharger automatiquement les skins Mojang
      */
     @Override
     public ResourceLocation getTextureLocation(BotEntity bot) {
         UUID playerUUID = bot.getPlayerUUID();
         String botName = bot.getBotName();
 
-        // DEBUG LOG every 100 ticks (5 seconds)
-        if (bot.tickCount % 100 == 0) {
-            System.out.println("[BotSkinRenderer] Getting texture for bot: " + botName + ", UUID: " + playerUUID);
-        }
-
         if (playerUUID == null) {
-            System.out.println("[BotSkinRenderer] UUID is NULL for bot " + botName + ", using default Steve skin");
             return DEFAULT_STEVE_SKIN;
         }
 
         try {
-            // Créer un GameProfile avec l'UUID et le nom du bot
+            // Créer un GameProfile avec l'UUID et le nom
             if (botName == null || botName.isEmpty()) {
                 botName = "Bot";
             }
 
-            // Variable finale pour la lambda
-            final String finalBotName = botName;
-
             GameProfile profile = new GameProfile(playerUUID, botName);
 
-            // Utiliser le SkinManager de Minecraft pour charger le skin
-            var minecraft = net.minecraft.client.Minecraft.getInstance();
-            var skinManager = minecraft.getSkinManager();
+            // Obtenir le Minecraft client et les services
+            Minecraft minecraft = Minecraft.getInstance();
 
-            // Enregistrer le profil pour charger les textures de manière asynchrone
-            // Cela déclenche le téléchargement des textures si elles ne sont pas déjà en cache
-            skinManager.registerSkins(profile, (type, location, texture) -> {
-                System.out.println("[BotSkinRenderer] Skin loaded callback for " + finalBotName + ": " + location);
-            }, true);
+            // Charger le profil complet depuis les serveurs Mojang (une seule fois)
+            if (!SKIN_LOAD_INITIATED.containsKey(playerUUID)) {
+                SKIN_LOAD_INITIATED.put(playerUUID, true);
 
-            // Récupérer le skin (sera le skin par défaut jusqu'à ce que le téléchargement soit terminé)
-            ResourceLocation skinLocation = skinManager.getInsecureSkinLocation(profile);
+                System.out.println("[BotSkinRenderer] Initiating skin load for " + botName + " (UUID: " + playerUUID + ")");
 
-            if (bot.tickCount % 100 == 0) {
-                System.out.println("[BotSkinRenderer] Returning skin location for " + botName + ": " + skinLocation);
+                // Utiliser le SessionService pour remplir le profil avec les propriétés de texture
+                MinecraftSessionService sessionService = minecraft.getMinecraftSessionService();
+
+                // Lancer le téléchargement du profil de manière asynchrone
+                Minecraft.getInstance().execute(() -> {
+                    try {
+                        GameProfile completeProfile = sessionService.fillProfileProperties(profile, false);
+                        System.out.println("[BotSkinRenderer] Profile loaded for " + botName +
+                            ", has textures: " + !completeProfile.getProperties().isEmpty());
+                    } catch (Exception e) {
+                        System.err.println("[BotSkinRenderer] Failed to load profile for " + botName + ": " + e.getMessage());
+                    }
+                });
             }
 
-            return skinLocation;
+            // Utiliser le SkinManager pour obtenir le skin
+            // Il utilisera le profil complet une fois téléchargé
+            return minecraft.getSkinManager().getInsecureSkinLocation(profile);
+
         } catch (Exception e) {
-            System.err.println("[BotPlayerSkinRenderer] Error loading skin for " + botName + " (UUID " + playerUUID + "): " + e.getMessage());
-            e.printStackTrace();
+            System.err.println("[BotSkinRenderer] Error getting skin for " + botName + ": " + e.getMessage());
             return DEFAULT_STEVE_SKIN;
         }
     }
@@ -109,9 +110,6 @@ public class BotPlayerSkinRenderer extends LivingEntityRenderer<BotEntity, Playe
 
         // Appliquer les transformations de base
         poseStack.pushPose();
-
-        // Scale si nécessaire (les bots ont la même taille qu'un joueur par défaut)
-        // poseStack.scale(0.9375F, 0.9375F, 0.9375F);
 
         super.render(bot, entityYaw, partialTicks, poseStack, bufferSource, packedLight);
 

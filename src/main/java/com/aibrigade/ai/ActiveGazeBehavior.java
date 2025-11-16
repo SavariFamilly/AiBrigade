@@ -68,13 +68,14 @@ public class ActiveGazeBehavior extends Goal {
 
     @Override
     public boolean canUse() {
-        // Toujours actif pour gérer le regard
-        return true;
+        // Actif uniquement pour les bots statiques (pas en follow)
+        return bot.isStatic() && !bot.isFollowingLeader();
     }
 
     @Override
     public boolean canContinueToUse() {
-        return true;
+        // Arrêter si le bot n'est plus statique ou commence à suivre
+        return bot.isStatic() && !bot.isFollowingLeader();
     }
 
     @Override

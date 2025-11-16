@@ -718,7 +718,7 @@ public class BotEntity extends PathfinderMob {
             if (this.tickCount % 100 == 0 && this.isFollowingLeader()) {
                 // CRITICAL: Check if goalSelector has goals and is working
                 int goalCount = this.goalSelector.getAvailableGoals().size();
-                int runningGoalCount = this.goalSelector.getRunningGoals().size();
+                long runningGoalCount = this.goalSelector.getRunningGoals().count();
 
                 com.aibrigade.main.AIBrigadeMod.LOGGER.info(
                     "[BotEntity][{}] Status check - Following: {}, LeaderID: {}, Static: {}, Alive: {}, GoalCount: {}, RunningGoals: {}",

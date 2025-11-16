@@ -66,11 +66,10 @@ public class BotPlayerSkinRenderer extends LivingEntityRenderer<BotEntity, Playe
         }
 
         try {
-            if (botName == null || botName.isEmpty()) {
-                botName = "Bot";
-            }
+            // Make botName final for lambda usage
+            final String finalBotName = (botName == null || botName.isEmpty()) ? "Bot" : botName;
 
-            GameProfile profile = new GameProfile(playerUUID, botName);
+            GameProfile profile = new GameProfile(playerUUID, finalBotName);
             Minecraft minecraft = Minecraft.getInstance();
 
             System.out.println("[BotSkinRenderer] Created GameProfile: " + profile.getName() + " (" + profile.getId() + ")");
@@ -80,23 +79,31 @@ public class BotPlayerSkinRenderer extends LivingEntityRenderer<BotEntity, Playe
             if (!SKIN_LOAD_INITIATED.containsKey(playerUUID)) {
                 SKIN_LOAD_INITIATED.put(playerUUID, true);
 
-                System.out.println("[BotSkinRenderer] Initiating skin download for " + botName + " via registerSkins()");
+                System.out.println("[BotSkinRenderer] Initiating skin download for " + finalBotName + " via registerSkins()");
 
                 // registerSkins télécharge automatiquement les textures depuis Mojang
                 minecraft.getSkinManager().registerSkins(profile, (type, location, profileTexture) -> {
-                    System.out.println("[BotSkinRenderer] CALLBACK: Skin loaded for " + botName + " - Type: " + type + ", Location: " + location);
+                    System.out.println("[BotSkinRenderer] CALLBACK: Skin loaded for " + finalBotName + " - Type: " + type + ", Location: " + location);
+                    System.out.println("[BotSkinRenderer] ProfileTexture URL: " + profileTexture.getUrl());
+
+                    // Force entity to refresh visually after skin loads
+                    // This ensures the renderer is called again with the new skin
+                    if (minecraft.level != null && bot.isAlive()) {
+                        System.out.println("[BotSkinRenderer] Refreshing entity dimensions to trigger re-render");
+                        bot.refreshDimensions();
+                    }
                 }, true);
             } else {
-                System.out.println("[BotSkinRenderer] Skin already initiated for " + botName);
+                System.out.println("[BotSkinRenderer] Skin already initiated for " + finalBotName);
             }
 
             // Retourner la texture (sera Steve jusqu'à ce que le téléchargement soit terminé)
             ResourceLocation skinLoc = minecraft.getSkinManager().getInsecureSkinLocation(profile);
-            System.out.println("[BotSkinRenderer] Returning skin location: " + skinLoc + " for " + botName);
+            System.out.println("[BotSkinRenderer] Returning skin location: " + skinLoc + " for " + finalBotName);
             return skinLoc;
 
         } catch (Exception e) {
-            System.err.println("[BotSkinRenderer] ERROR for " + botName + ": " + e.getMessage());
+            System.err.println("[BotSkinRenderer] ERROR for " + (botName != null ? botName : "Unknown") + ": " + e.getMessage());
             e.printStackTrace();
             return DEFAULT_STEVE_SKIN;
         }

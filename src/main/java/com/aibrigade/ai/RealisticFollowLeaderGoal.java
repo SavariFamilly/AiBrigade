@@ -69,29 +69,45 @@ public class RealisticFollowLeaderGoal extends Goal {
     private int curveUpdateTimer;
 
     public RealisticFollowLeaderGoal(BotEntity bot, double speed, float minDist, float maxDist) {
-        this.bot = bot;
-        this.speedModifier = speed;
-        this.minFollowDistance = minDist;
-        this.maxFollowDistance = maxDist;
-        this.random = new Random(bot.getUUID().getMostSignificantBits());
+        AIBrigadeMod.LOGGER.info("[RealisticFollowLeaderGoal] CONSTRUCTOR CALLED - Creating goal for bot");
 
-        this.setFlags(EnumSet.of(Goal.Flag.MOVE, Goal.Flag.LOOK));
+        try {
+            this.bot = bot;
+            this.speedModifier = speed;
+            this.minFollowDistance = minDist;
+            this.maxFollowDistance = maxDist;
 
-        // Déterminer le type de comportement selon les probabilités (1/6 vs 5/6)
-        if (random.nextFloat() < BotAIConstants.ACTIVE_FOLLOW_PROBABILITY) {
-            this.behaviorType = FollowBehaviorType.ACTIVE_FOLLOW;
-            this.chaseChance = 0.95f; // Suit activement presque toujours
-        } else {
-            this.behaviorType = FollowBehaviorType.RADIUS_BASED;
-            this.chaseChance = 0.3f; // Suit peu souvent, reste dans le radius
+            AIBrigadeMod.LOGGER.info("[RealisticFollowLeaderGoal] Basic fields set, getting UUID...");
+            this.random = new Random(bot.getUUID().getMostSignificantBits());
+
+            AIBrigadeMod.LOGGER.info("[RealisticFollowLeaderGoal] Setting flags...");
+            this.setFlags(EnumSet.of(Goal.Flag.MOVE, Goal.Flag.LOOK));
+
+            // Déterminer le type de comportement selon les probabilités (1/6 vs 5/6)
+            AIBrigadeMod.LOGGER.info("[RealisticFollowLeaderGoal] Determining behavior type...");
+            if (random.nextFloat() < BotAIConstants.ACTIVE_FOLLOW_PROBABILITY) {
+                this.behaviorType = FollowBehaviorType.ACTIVE_FOLLOW;
+                this.chaseChance = 0.95f; // Suit activement presque toujours
+            } else {
+                this.behaviorType = FollowBehaviorType.RADIUS_BASED;
+                this.chaseChance = 0.3f; // Suit peu souvent, reste dans le radius
+            }
+
+            // Initialiser les comportements aléatoires
+            AIBrigadeMod.LOGGER.info("[RealisticFollowLeaderGoal] Initializing random behaviors...");
+            this.currentSpeedMultiplier = 0.9 + random.nextDouble() * 0.2; // 0.9-1.1x
+            this.isActivelyChasing = random.nextFloat() < chaseChance;
+
+            AIBrigadeMod.LOGGER.info("[RealisticFollowLeaderGoal] Getting bot name...");
+            String botName = bot.getBotName();
+
+            AIBrigadeMod.LOGGER.info("[RealisticFollowLeaderGoal] Bot {} configured with behavior: {} (chase chance: {})",
+                botName, behaviorType, chaseChance);
+
+        } catch (Exception e) {
+            AIBrigadeMod.LOGGER.error("[RealisticFollowLeaderGoal] EXCEPTION in constructor: {}", e.getMessage(), e);
+            throw e;
         }
-
-        // Initialiser les comportements aléatoires
-        this.currentSpeedMultiplier = 0.9 + random.nextDouble() * 0.2; // 0.9-1.1x
-        this.isActivelyChasing = random.nextFloat() < chaseChance;
-
-        AIBrigadeMod.LOGGER.info("[RealisticFollowLeaderGoal] Bot {} configured with behavior: {} (chase chance: {})",
-            bot.getBotName(), behaviorType, chaseChance);
     }
 
     @Override

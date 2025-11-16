@@ -171,16 +171,21 @@ public class BotEntity extends PathfinderMob {
      */
     @Override
     protected void registerGoals() {
+        com.aibrigade.main.AIBrigadeMod.LOGGER.info("[BotEntity] registerGoals() CALLED for bot");
         super.registerGoals();
 
         // Priorité 0: Float in water
+        com.aibrigade.main.AIBrigadeMod.LOGGER.info("[BotEntity] Adding FloatGoal...");
         this.goalSelector.addGoal(0, new net.minecraft.world.entity.ai.goal.FloatGoal(this));
 
         // Priorité 1: Active gaze behavior (regard actif 2/6 bots)
+        com.aibrigade.main.AIBrigadeMod.LOGGER.info("[BotEntity] Adding ActiveGazeBehavior...");
         this.goalSelector.addGoal(1, new ActiveGazeBehavior(this));
 
         // Priorité 2: Realistic follow leader (avec probabilités et variations)
+        com.aibrigade.main.AIBrigadeMod.LOGGER.info("[BotEntity] Creating RealisticFollowLeaderGoal...");
         this.goalSelector.addGoal(2, new RealisticFollowLeaderGoal(this, 1.1D, 3.0F, 10.0F));
+        com.aibrigade.main.AIBrigadeMod.LOGGER.info("[BotEntity] RealisticFollowLeaderGoal added successfully");
 
         // Priorité 3: Place blocks to reach target (avec toggle canPlaceBlocks)
         this.goalSelector.addGoal(3, new PlaceBlockToReachTargetGoal(this));

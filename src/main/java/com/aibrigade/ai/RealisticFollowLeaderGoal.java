@@ -112,8 +112,12 @@ public class RealisticFollowLeaderGoal extends Goal {
 
     @Override
     public boolean canUse() {
-        // LOG DÉTAILLÉ
-        String botName = bot.getBotName();
+        AIBrigadeMod.LOGGER.info("[FollowLeader] >>> canUse() CALLED <<<");
+
+        try {
+            // LOG DÉTAILLÉ
+            String botName = bot.getBotName();
+            AIBrigadeMod.LOGGER.info("[FollowLeader][{}] Starting canUse evaluation...", botName);
 
         // Vérifier le mode statique et le follow
         if (!EntityValidator.isBotAIReady(bot)) {
@@ -166,6 +170,11 @@ public class RealisticFollowLeaderGoal extends Goal {
         AIBrigadeMod.LOGGER.info("[FollowLeader][{}] canUse={} - RADIUS_BASED (distance={}, threshold={})",
             botName, result, distance, (minFollowDistance * 1.5));
         return result;
+
+        } catch (Exception e) {
+            AIBrigadeMod.LOGGER.error("[FollowLeader] EXCEPTION in canUse(): {}", e.getMessage(), e);
+            return false;
+        }
     }
 
     @Override

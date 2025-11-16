@@ -184,8 +184,9 @@ public class BotEntity extends PathfinderMob {
 
         // Priorité 2: Realistic follow leader (avec probabilités et variations)
         com.aibrigade.main.AIBrigadeMod.LOGGER.info("[BotEntity] Creating RealisticFollowLeaderGoal...");
-        this.goalSelector.addGoal(2, new RealisticFollowLeaderGoal(this, 1.1D, 3.0F, 10.0F));
-        com.aibrigade.main.AIBrigadeMod.LOGGER.info("[BotEntity] RealisticFollowLeaderGoal added successfully");
+        RealisticFollowLeaderGoal followGoal = new RealisticFollowLeaderGoal(this, 1.1D, 3.0F, 10.0F);
+        this.goalSelector.addGoal(2, followGoal);
+        com.aibrigade.main.AIBrigadeMod.LOGGER.info("[BotEntity] RealisticFollowLeaderGoal added successfully - Priority 2");
 
         // Priorité 3: Place blocks to reach target (avec toggle canPlaceBlocks)
         this.goalSelector.addGoal(3, new PlaceBlockToReachTargetGoal(this));
@@ -712,6 +713,18 @@ public class BotEntity extends PathfinderMob {
         if (!this.level().isClientSide) {
             // Server-side only logic
             updateAIState();
+
+            // Diagnostic: Log follow state every 100 ticks (5 seconds)
+            if (this.tickCount % 100 == 0 && this.isFollowingLeader()) {
+                com.aibrigade.main.AIBrigadeMod.LOGGER.info(
+                    "[BotEntity][{}] Status check - Following: {}, LeaderID: {}, Static: {}, Alive: {}",
+                    this.getBotName(),
+                    this.isFollowingLeader(),
+                    this.getLeaderId(),
+                    this.isStatic(),
+                    this.isAlive()
+                );
+            }
         }
     }
 

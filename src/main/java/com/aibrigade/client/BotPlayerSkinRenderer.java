@@ -82,14 +82,17 @@ public class BotPlayerSkinRenderer extends LivingEntityRenderer<BotEntity, Playe
                 // Utiliser le SessionService pour remplir le profil avec les propriétés de texture
                 MinecraftSessionService sessionService = minecraft.getMinecraftSessionService();
 
+                // Create final variable for lambda
+                final String finalBotName = botName;
+
                 // Lancer le téléchargement du profil de manière asynchrone
                 Minecraft.getInstance().execute(() -> {
                     try {
                         GameProfile completeProfile = sessionService.fillProfileProperties(profile, false);
-                        System.out.println("[BotSkinRenderer] Profile loaded for " + botName +
+                        System.out.println("[BotSkinRenderer] Profile loaded for " + finalBotName +
                             ", has textures: " + !completeProfile.getProperties().isEmpty());
                     } catch (Exception e) {
-                        System.err.println("[BotSkinRenderer] Failed to load profile for " + botName + ": " + e.getMessage());
+                        System.err.println("[BotSkinRenderer] Failed to load profile for " + finalBotName + ": " + e.getMessage());
                     }
                 });
             }

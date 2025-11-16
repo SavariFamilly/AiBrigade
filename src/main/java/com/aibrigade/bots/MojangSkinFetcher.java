@@ -179,12 +179,10 @@ public class MojangSkinFetcher {
                     // Le joueur n'existe pas
                     NON_EXISTENT_USERNAMES.add(username.toLowerCase());
                     failedAttempts++;
-                    com.aibrigade.main.AIBrigadeMod.LOGGER.debug("Player {} does not exist", username);
                     return null;
                 }
 
                 if (responseCode != 200) {
-                    com.aibrigade.main.AIBrigadeMod.LOGGER.warn("Player {} check failed (HTTP {})", username, responseCode);
                     failedAttempts++;
                     return null;
                 }
@@ -214,8 +212,6 @@ public class MojangSkinFetcher {
                 NAME_TO_UUID_CACHE.put(username.toLowerCase(), uuid);
                 VERIFIED_USERNAMES.add(username);
                 successfulFinds++;
-
-                com.aibrigade.main.AIBrigadeMod.LOGGER.info("✓ Verified player: {} (UUID: {})", username, uuid);
                 return uuid;
 
             } catch (Exception e) {
@@ -245,11 +241,10 @@ public class MojangSkinFetcher {
                 try {
                     UUID uuid = getUUIDFromUsername(randomUsername).get();
                     if (uuid != null) {
-                        com.aibrigade.main.AIBrigadeMod.LOGGER.info("Found existing player: {} after {} attempts", randomUsername, attempts + 1);
                         return randomUsername;
                     }
                 } catch (Exception e) {
-                    com.aibrigade.main.AIBrigadeMod.LOGGER.debug("Attempt {}: {} does not exist", attempts + 1, randomUsername);
+                    // Player doesn't exist, continue searching
                 }
 
                 attempts++;
@@ -373,8 +368,6 @@ public class MojangSkinFetcher {
      * Génère des pseudos aléatoires et trouve un qui existe vraiment
      */
     public static void applyRandomFamousSkin(BotEntity bot) {
-        com.aibrigade.main.AIBrigadeMod.LOGGER.info("Searching for random existing player for bot...");
-
         // Appliquer un nom temporaire
         bot.setBotName("Searching_Player");
 
@@ -382,7 +375,6 @@ public class MojangSkinFetcher {
         findRandomExistingPlayer(20).thenAccept(username -> {
             if (username == null) {
                 // Fallback : utiliser un nom généré
-                com.aibrigade.main.AIBrigadeMod.LOGGER.warn("Could not find existing player, using fallback");
                 UUID fallbackUUID = UUID.randomUUID();
                 bot.setPlayerUUID(fallbackUUID);
                 bot.setBotName("Bot_" + fallbackUUID.toString().substring(0, 8));
@@ -398,7 +390,6 @@ public class MojangSkinFetcher {
             getUUIDFromUsername(username).thenAccept(uuid -> {
                 if (uuid == null) {
                     // Ne devrait pas arriver car on a déjà vérifié
-                    com.aibrigade.main.AIBrigadeMod.LOGGER.error("UUID became null for {}", username);
                     UUID fallbackUUID = UUID.randomUUID();
                     bot.setPlayerUUID(fallbackUUID);
                     bot.setBotName("Bot_" + fallbackUUID.toString().substring(0, 8));
@@ -417,13 +408,9 @@ public class MojangSkinFetcher {
                 bot.setPlayerUUID(uuid);
                 bot.setBotName(username);
 
-                com.aibrigade.main.AIBrigadeMod.LOGGER.info("✓ Bot configured with verified player: {} ({})", username, uuid);
-
                 // Fetch le profil complet en arrière-plan pour les textures
                 fetchProfileAsync(uuid).thenAccept(profile -> {
                     if (profile != null) {
-                        com.aibrigade.main.AIBrigadeMod.LOGGER.info("✓ Skin loaded for: {}", profile.getName());
-
                         // Force client synchronization by re-setting the UUID
                         // This triggers a client-side cache refresh for the skin
                         bot.setPlayerUUID(uuid);

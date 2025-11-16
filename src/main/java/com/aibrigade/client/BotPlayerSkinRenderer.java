@@ -58,7 +58,10 @@ public class BotPlayerSkinRenderer extends LivingEntityRenderer<BotEntity, Playe
         UUID playerUUID = bot.getPlayerUUID();
         String botName = bot.getBotName();
 
+        System.out.println("[BotSkinRenderer] getTextureLocation called for bot: " + botName + ", UUID: " + playerUUID);
+
         if (playerUUID == null) {
+            System.out.println("[BotSkinRenderer] UUID is NULL, returning default Steve skin");
             return DEFAULT_STEVE_SKIN;
         }
 
@@ -70,22 +73,31 @@ public class BotPlayerSkinRenderer extends LivingEntityRenderer<BotEntity, Playe
             GameProfile profile = new GameProfile(playerUUID, botName);
             Minecraft minecraft = Minecraft.getInstance();
 
+            System.out.println("[BotSkinRenderer] Created GameProfile: " + profile.getName() + " (" + profile.getId() + ")");
+
             // Utiliser registerSkins pour charger le profil complet depuis Mojang
             // C'est la méthode que Minecraft utilise pour les vrais joueurs
             if (!SKIN_LOAD_INITIATED.containsKey(playerUUID)) {
                 SKIN_LOAD_INITIATED.put(playerUUID, true);
 
+                System.out.println("[BotSkinRenderer] Initiating skin download for " + botName + " via registerSkins()");
+
                 // registerSkins télécharge automatiquement les textures depuis Mojang
                 minecraft.getSkinManager().registerSkins(profile, (type, location, profileTexture) -> {
-                    // Ce callback est appelé quand la texture est chargée
-                    // Le SkinManager cache automatiquement la texture
+                    System.out.println("[BotSkinRenderer] CALLBACK: Skin loaded for " + botName + " - Type: " + type + ", Location: " + location);
                 }, true);
+            } else {
+                System.out.println("[BotSkinRenderer] Skin already initiated for " + botName);
             }
 
             // Retourner la texture (sera Steve jusqu'à ce que le téléchargement soit terminé)
-            return minecraft.getSkinManager().getInsecureSkinLocation(profile);
+            ResourceLocation skinLoc = minecraft.getSkinManager().getInsecureSkinLocation(profile);
+            System.out.println("[BotSkinRenderer] Returning skin location: " + skinLoc + " for " + botName);
+            return skinLoc;
 
         } catch (Exception e) {
+            System.err.println("[BotSkinRenderer] ERROR for " + botName + ": " + e.getMessage());
+            e.printStackTrace();
             return DEFAULT_STEVE_SKIN;
         }
     }

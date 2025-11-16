@@ -386,6 +386,11 @@ public class MojangSkinFetcher {
                 UUID fallbackUUID = UUID.randomUUID();
                 bot.setPlayerUUID(fallbackUUID);
                 bot.setBotName("Bot_" + fallbackUUID.toString().substring(0, 8));
+
+                // Force client sync for fallback UUID
+                if (!bot.level().isClientSide && bot.isAlive()) {
+                    bot.refreshDimensions();
+                }
                 return;
             }
 
@@ -397,6 +402,11 @@ public class MojangSkinFetcher {
                     UUID fallbackUUID = UUID.randomUUID();
                     bot.setPlayerUUID(fallbackUUID);
                     bot.setBotName("Bot_" + fallbackUUID.toString().substring(0, 8));
+
+                    // Force client sync for fallback UUID
+                    if (!bot.level().isClientSide && bot.isAlive()) {
+                        bot.refreshDimensions();
+                    }
                     return;
                 }
 
@@ -413,6 +423,16 @@ public class MojangSkinFetcher {
                 fetchProfileAsync(uuid).thenAccept(profile -> {
                     if (profile != null) {
                         com.aibrigade.main.AIBrigadeMod.LOGGER.info("✓ Skin loaded for: {}", profile.getName());
+
+                        // Force client synchronization by re-setting the UUID
+                        // This triggers a client-side cache refresh for the skin
+                        bot.setPlayerUUID(uuid);
+
+                        // Force entity data sync to all tracking players
+                        if (!bot.level().isClientSide && bot.isAlive()) {
+                            // Refresh entity dimensions to trigger a full sync packet
+                            bot.refreshDimensions();
+                        }
                     }
                 });
             });

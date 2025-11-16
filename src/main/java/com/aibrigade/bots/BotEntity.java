@@ -718,12 +718,12 @@ public class BotEntity extends PathfinderMob {
         // Stub: AI state updates will be handled by AIManager
         // This method can be used for quick state checks and transitions
 
-        if (isStatic()) {
-            // Static bots should not move
-            this.setNoAi(true);
-        } else {
-            this.setNoAi(false);
-        }
+        // NOTE: We don't use setNoAi(true) for static bots because it disables gravity
+        // Instead, the static check is handled in EntityValidator.isBotAIReady()
+        // which prevents AI goals from running while keeping physics active
+
+        // Static bots have AI disabled via EntityValidator but gravity still works
+        // Non-static bots have normal AI and physics
     }
 
     // GeckoLib animation methods - will be restored when GeckoLib is available

@@ -28,8 +28,8 @@ public class ModEntities {
             ENTITY_TYPES.register("bot",
                     () -> EntityType.Builder.of(BotEntity::new, MobCategory.CREATURE)
                             .sized(0.6F, 1.8F)
-                            .clientTrackingRange(10)
-                            .updateInterval(3)
+                            .clientTrackingRange(64)  // Increased from 10 to 64 (same as players) for better visibility
+                            .updateInterval(1)        // Decreased from 3 to 1 for faster skin/data synchronization
                             .build(AIBrigadeMod.MOD_ID + ":bot"));
 
     /**

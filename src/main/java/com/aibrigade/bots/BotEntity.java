@@ -171,16 +171,22 @@ public class BotEntity extends PathfinderMob {
      */
     @Override
     protected void registerGoals() {
+        com.aibrigade.main.AIBrigadeMod.LOGGER.info("[BotEntity] registerGoals() CALLED for bot");
         super.registerGoals();
 
         // Priorité 0: Float in water
+        com.aibrigade.main.AIBrigadeMod.LOGGER.info("[BotEntity] Adding FloatGoal...");
         this.goalSelector.addGoal(0, new net.minecraft.world.entity.ai.goal.FloatGoal(this));
 
         // Priorité 1: Active gaze behavior (regard actif 2/6 bots)
+        com.aibrigade.main.AIBrigadeMod.LOGGER.info("[BotEntity] Adding ActiveGazeBehavior...");
         this.goalSelector.addGoal(1, new ActiveGazeBehavior(this));
 
         // Priorité 2: Realistic follow leader (avec probabilités et variations)
-        this.goalSelector.addGoal(2, new RealisticFollowLeaderGoal(this, 1.1D, 3.0F, 10.0F));
+        com.aibrigade.main.AIBrigadeMod.LOGGER.info("[BotEntity] Creating RealisticFollowLeaderGoal...");
+        RealisticFollowLeaderGoal followGoal = new RealisticFollowLeaderGoal(this, 1.1D, 3.0F, 10.0F);
+        this.goalSelector.addGoal(2, followGoal);
+        com.aibrigade.main.AIBrigadeMod.LOGGER.info("[BotEntity] RealisticFollowLeaderGoal added successfully - Priority 2");
 
         // Priorité 3: Place blocks to reach target (avec toggle canPlaceBlocks)
         this.goalSelector.addGoal(3, new PlaceBlockToReachTargetGoal(this));
@@ -707,6 +713,35 @@ public class BotEntity extends PathfinderMob {
         if (!this.level().isClientSide) {
             // Server-side only logic
             updateAIState();
+
+            // Diagnostic: Log follow state every 100 ticks (5 seconds)
+            if (this.tickCount % 100 == 0 && this.isFollowingLeader()) {
+                // CRITICAL: Check if goalSelector has goals and is working
+                int goalCount = this.goalSelector.getAvailableGoals().size();
+                long runningGoalCount = this.goalSelector.getRunningGoals().count();
+
+                com.aibrigade.main.AIBrigadeMod.LOGGER.info(
+                    "[BotEntity][{}] Status check - Following: {}, LeaderID: {}, Static: {}, Alive: {}, GoalCount: {}, RunningGoals: {}",
+                    this.getBotName(),
+                    this.isFollowingLeader(),
+                    this.getLeaderId(),
+                    this.isStatic(),
+                    this.isAlive(),
+                    goalCount,
+                    runningGoalCount
+                );
+
+                // Log each goal's status
+                this.goalSelector.getAvailableGoals().forEach(goal -> {
+                    com.aibrigade.main.AIBrigadeMod.LOGGER.info(
+                        "[BotEntity][{}] Goal: {} (Priority: {}, Running: {})",
+                        this.getBotName(),
+                        goal.getGoal().getClass().getSimpleName(),
+                        goal.getPriority(),
+                        goal.isRunning()
+                    );
+                });
+            }
         }
     }
 

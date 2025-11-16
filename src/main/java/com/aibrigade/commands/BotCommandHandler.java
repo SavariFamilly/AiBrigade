@@ -279,6 +279,7 @@ public class BotCommandHandler {
     /**
      * Command: /aibrigade followleader <groupName> <true/false> <radius>
      * Enables/disables follow leader mode for a group with specified radius
+     * Automatically assigns the executing player as the leader
      * Selon le cahier des charges:
      * - 5/6 des bots suivent dans le radius défini
      * - 1/6 des bots suivent activement le leader
@@ -294,12 +295,40 @@ public class BotCommandHandler {
             return 0;
         }
 
+        // CRITICAL FIX: Automatically assign the executing player as the leader
+        if (enabled) {
+            try {
+                var player = context.getSource().getPlayerOrException();
+                String leaderName = player.getGameProfile().getName();
+
+                AIBrigadeMod.LOGGER.info("Auto-assigning leader {} to group {}", leaderName, groupName);
+                boolean assignSuccess = botManager.assignLeader(groupName, leaderName);
+
+                if (!assignSuccess) {
+                    context.getSource().sendFailure(Component.literal("Failed to assign leader - group not found"));
+                    return 0;
+                }
+            } catch (CommandSyntaxException e) {
+                context.getSource().sendFailure(Component.literal("This command must be executed by a player"));
+                return 0;
+            }
+        }
+
         boolean success = botManager.setFollowLeader(groupName, enabled, radius);
 
         if (success) {
+            String playerName;
+            try {
+                playerName = context.getSource().getPlayerOrException().getGameProfile().getName();
+            } catch (CommandSyntaxException e) {
+                playerName = "Unknown";
+            }
+
+            String finalPlayerName = playerName;
             context.getSource().sendSuccess(() ->
                 Component.literal("Follow leader mode " + (enabled ? "enabled" : "disabled") +
                     " for group '" + groupName + "' with radius " + radius +
+                    (enabled ? "\n§7Leader: " + finalPlayerName : "") +
                     "\n§7(5/6 bots follow in radius, 1/6 follow actively)"),
                 true);
             return 1;

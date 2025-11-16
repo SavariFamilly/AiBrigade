@@ -2,6 +2,7 @@ package com.aibrigade.client;
 
 import com.aibrigade.bots.BotEntity;
 import com.aibrigade.bots.MojangSkinFetcher;
+import com.aibrigade.main.AIBrigadeMod;
 import com.mojang.authlib.GameProfile;
 import com.mojang.authlib.minecraft.MinecraftSessionService;
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -51,55 +52,60 @@ public class BotPlayerSkinRenderer extends LivingEntityRenderer<BotEntity, Playe
 
     /**
      * Récupère la texture (skin) pour ce bot
-     * Utilise le système de Minecraft pour télécharger automatiquement les skins Mojang
+     * Charge automatiquement les skins Mojang depuis les serveurs via le SkinManager
      */
     @Override
     public ResourceLocation getTextureLocation(BotEntity bot) {
         UUID playerUUID = bot.getPlayerUUID();
         String botName = bot.getBotName();
 
+        AIBrigadeMod.LOGGER.info("[BotSkinRenderer] getTextureLocation called for bot: {}, UUID: {}", botName, playerUUID);
+
         if (playerUUID == null) {
+            AIBrigadeMod.LOGGER.info("[BotSkinRenderer] UUID is NULL, returning default Steve skin");
             return DEFAULT_STEVE_SKIN;
         }
 
         try {
-            // Créer un GameProfile avec l'UUID et le nom
-            if (botName == null || botName.isEmpty()) {
-                botName = "Bot";
-            }
+            // Make botName final for lambda usage
+            final String finalBotName = (botName == null || botName.isEmpty()) ? "Bot" : botName;
 
-            GameProfile profile = new GameProfile(playerUUID, botName);
-
-            // Obtenir le Minecraft client et les services
+            GameProfile profile = new GameProfile(playerUUID, finalBotName);
             Minecraft minecraft = Minecraft.getInstance();
 
-            // Charger le profil complet depuis les serveurs Mojang (une seule fois)
+            AIBrigadeMod.LOGGER.info("[BotSkinRenderer] Created GameProfile: {} ({})", profile.getName(), profile.getId());
+
+            // Utiliser registerSkins pour charger le profil complet depuis Mojang
+            // C'est la méthode que Minecraft utilise pour les vrais joueurs
             if (!SKIN_LOAD_INITIATED.containsKey(playerUUID)) {
                 SKIN_LOAD_INITIATED.put(playerUUID, true);
 
-                System.out.println("[BotSkinRenderer] Initiating skin load for " + botName + " (UUID: " + playerUUID + ")");
+                AIBrigadeMod.LOGGER.info("[BotSkinRenderer] Initiating skin download for {} via registerSkins()", finalBotName);
 
-                // Utiliser le SessionService pour remplir le profil avec les propriétés de texture
-                MinecraftSessionService sessionService = minecraft.getMinecraftSessionService();
+                // registerSkins télécharge automatiquement les textures depuis Mojang
+                minecraft.getSkinManager().registerSkins(profile, (type, location, profileTexture) -> {
+                    AIBrigadeMod.LOGGER.info("[BotSkinRenderer] CALLBACK: Skin loaded for {} - Type: {}, Location: {}",
+                        finalBotName, type, location);
+                    AIBrigadeMod.LOGGER.info("[BotSkinRenderer] ProfileTexture URL: {}", profileTexture.getUrl());
 
-                // Lancer le téléchargement du profil de manière asynchrone
-                Minecraft.getInstance().execute(() -> {
-                    try {
-                        GameProfile completeProfile = sessionService.fillProfileProperties(profile, false);
-                        System.out.println("[BotSkinRenderer] Profile loaded for " + botName +
-                            ", has textures: " + !completeProfile.getProperties().isEmpty());
-                    } catch (Exception e) {
-                        System.err.println("[BotSkinRenderer] Failed to load profile for " + botName + ": " + e.getMessage());
+                    // Force entity to refresh visually after skin loads
+                    // This ensures the renderer is called again with the new skin
+                    if (minecraft.level != null && bot.isAlive()) {
+                        AIBrigadeMod.LOGGER.info("[BotSkinRenderer] Refreshing entity dimensions to trigger re-render");
+                        bot.refreshDimensions();
                     }
-                });
+                }, true);
+            } else {
+                AIBrigadeMod.LOGGER.info("[BotSkinRenderer] Skin already initiated for {}", finalBotName);
             }
 
-            // Utiliser le SkinManager pour obtenir le skin
-            // Il utilisera le profil complet une fois téléchargé
-            return minecraft.getSkinManager().getInsecureSkinLocation(profile);
+            // Retourner la texture (sera Steve jusqu'à ce que le téléchargement soit terminé)
+            ResourceLocation skinLoc = minecraft.getSkinManager().getInsecureSkinLocation(profile);
+            AIBrigadeMod.LOGGER.info("[BotSkinRenderer] Returning skin location: {} for {}", skinLoc, finalBotName);
+            return skinLoc;
 
         } catch (Exception e) {
-            System.err.println("[BotSkinRenderer] Error getting skin for " + botName + ": " + e.getMessage());
+            AIBrigadeMod.LOGGER.error("[BotSkinRenderer] ERROR for {}: {}", (botName != null ? botName : "Unknown"), e.getMessage(), e);
             return DEFAULT_STEVE_SKIN;
         }
     }

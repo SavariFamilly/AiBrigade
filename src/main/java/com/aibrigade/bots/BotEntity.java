@@ -716,14 +716,31 @@ public class BotEntity extends PathfinderMob {
 
             // Diagnostic: Log follow state every 100 ticks (5 seconds)
             if (this.tickCount % 100 == 0 && this.isFollowingLeader()) {
+                // CRITICAL: Check if goalSelector has goals and is working
+                int goalCount = this.goalSelector.getAvailableGoals().size();
+                int runningGoalCount = this.goalSelector.getRunningGoals().size();
+
                 com.aibrigade.main.AIBrigadeMod.LOGGER.info(
-                    "[BotEntity][{}] Status check - Following: {}, LeaderID: {}, Static: {}, Alive: {}",
+                    "[BotEntity][{}] Status check - Following: {}, LeaderID: {}, Static: {}, Alive: {}, GoalCount: {}, RunningGoals: {}",
                     this.getBotName(),
                     this.isFollowingLeader(),
                     this.getLeaderId(),
                     this.isStatic(),
-                    this.isAlive()
+                    this.isAlive(),
+                    goalCount,
+                    runningGoalCount
                 );
+
+                // Log each goal's status
+                this.goalSelector.getAvailableGoals().forEach(goal -> {
+                    com.aibrigade.main.AIBrigadeMod.LOGGER.info(
+                        "[BotEntity][{}] Goal: {} (Priority: {}, Running: {})",
+                        this.getBotName(),
+                        goal.getGoal().getClass().getSimpleName(),
+                        goal.getPriority(),
+                        goal.isRunning()
+                    );
+                });
             }
         }
     }

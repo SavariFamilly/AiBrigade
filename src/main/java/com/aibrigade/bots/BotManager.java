@@ -756,26 +756,6 @@ public class BotManager {
         return null;
     }
 
-    /**
-     * Find leader UUID by name (player or bot)
-     */
-    private UUID findLeaderUUID(Level level, String leaderName) {
-        // Try to find player first
-        if (!level.isClientSide() && level instanceof net.minecraft.server.level.ServerLevel serverLevel) {
-            Player player = serverLevel.getServer().getPlayerList().getPlayerByName(leaderName);
-            if (player != null) {
-                return player.getUUID();
-            }
-        }
-
-        // Try to find bot
-        BotEntity bot = findBotByName(leaderName);
-        if (bot != null) {
-            return bot.getUUID();
-        }
-
-        return null;
-    }
 
     /**
      * Select a random skin for a bot

@@ -95,81 +95,38 @@ public class RealisticFollowLeaderGoal extends Goal {
 
     @Override
     public boolean canUse() {
-        // DEBUG: Log entry
-        if (bot.tickCount % 100 == 0) { // Log every 5 seconds
-            System.out.println("[FollowLeader] Bot " + bot.getBotName() + " checking canUse()");
-        }
-
         // Vérifier le mode statique et le follow
-        if (!EntityValidator.isBotAIReady(bot)) {
-            if (bot.tickCount % 100 == 0) {
-                System.out.println("[FollowLeader] Bot " + bot.getBotName() + " - AI not ready (isStatic=" + bot.isStatic() + ")");
-            }
-            return false;
-        }
-
-        if (!bot.isFollowingLeader()) {
-            if (bot.tickCount % 100 == 0) {
-                System.out.println("[FollowLeader] Bot " + bot.getBotName() + " - Not following leader");
-            }
+        if (!EntityValidator.isBotAIReady(bot) || !bot.isFollowingLeader()) {
             return false;
         }
 
         UUID leaderId = bot.getLeaderId();
         if (leaderId == null) {
-            if (bot.tickCount % 100 == 0) {
-                System.out.println("[FollowLeader] Bot " + bot.getBotName() + " - No leader ID");
-            }
             return false;
         }
 
         // Trouver le leader
         LivingEntity leader = EntityFinder.findEntityByUUID(bot.level(), leaderId, bot.position(), 100.0);
         if (leader == null) {
-            if (bot.tickCount % 100 == 0) {
-                System.out.println("[FollowLeader] Bot " + bot.getBotName() + " - Leader not found");
-            }
             return false;
         }
 
         // Distance au leader
         double distance = DistanceHelper.getDistance(bot, leader);
 
-        if (bot.tickCount % 100 == 0) {
-            System.out.println("[FollowLeader] Bot " + bot.getBotName() + " - Distance to leader: " + distance +
-                ", Type: " + behaviorType + ", Chasing: " + isActivelyChasing);
+        // Si le bot a une cible d'attaque ET est dans le radius, laisser le combat se faire
+        if (bot.getTarget() != null && distance <= maxFollowDistance) {
+            return false; // Combat goal prend le dessus
         }
 
-        // SIMPLIFIED LOGIC: Just check if bot should move towards leader
-        if (distance > maxFollowDistance) {
-            // Too far from leader, must follow
-            if (bot.tickCount % 100 == 0) {
-                System.out.println("[FollowLeader] Bot " + bot.getBotName() + " - TOO FAR, activating goal");
-            }
-            return true;
+        // Active follow (1/6): suit de très près le leader (2-4 blocs)
+        if (behaviorType == FollowBehaviorType.ACTIVE_FOLLOW) {
+            return distance > minFollowDistance; // > 3 blocs
         }
 
-        if (behaviorType == FollowBehaviorType.ACTIVE_FOLLOW && distance > minFollowDistance) {
-            // Active followers stay close
-            if (bot.tickCount % 100 == 0) {
-                System.out.println("[FollowLeader] Bot " + bot.getBotName() + " - ACTIVE FOLLOW, activating goal");
-            }
-            return true;
-        }
-
-        // Radius-based: only move if actively chasing
-        if (isActivelyChasing && distance > minFollowDistance) {
-            if (bot.tickCount % 100 == 0) {
-                System.out.println("[FollowLeader] Bot " + bot.getBotName() + " - CHASING, activating goal");
-            }
-            return true;
-        }
-
-        // Otherwise, don't activate (let other goals run)
-        if (bot.tickCount % 100 == 0) {
-            System.out.println("[FollowLeader] Bot " + bot.getBotName() + " - NOT activating goal");
-        }
-        return false;
+        // Radius-based (5/6): suit dans le radius, dispersé naturellement
+        // Active si plus loin que 1.5x la distance minimale (4.5 blocs)
+        return distance > (minFollowDistance * 1.5);
     }
 
     @Override

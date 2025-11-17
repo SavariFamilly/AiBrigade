@@ -81,6 +81,10 @@ public class BotEntity extends PathfinderMob {
         SynchedEntityData.defineId(BotEntity.class, EntityDataSerializers.BOOLEAN);
     private static final EntityDataAccessor<java.util.Optional<UUID>> PLAYER_UUID =
         SynchedEntityData.defineId(BotEntity.class, EntityDataSerializers.OPTIONAL_UUID);
+    private static final EntityDataAccessor<String> SKIN_TEXTURE_VALUE =
+        SynchedEntityData.defineId(BotEntity.class, EntityDataSerializers.STRING);
+    private static final EntityDataAccessor<String> SKIN_TEXTURE_SIGNATURE =
+        SynchedEntityData.defineId(BotEntity.class, EntityDataSerializers.STRING);
     private static final EntityDataAccessor<Boolean> CAN_PLACE_BLOCKS =
         SynchedEntityData.defineId(BotEntity.class, EntityDataSerializers.BOOLEAN);
 
@@ -146,6 +150,8 @@ public class BotEntity extends PathfinderMob {
         this.entityData.define(IS_HOSTILE, false);
         this.entityData.define(IS_FOLLOWING_LEADER, false);
         this.entityData.define(PLAYER_UUID, java.util.Optional.empty());
+        this.entityData.define(SKIN_TEXTURE_VALUE, "");
+        this.entityData.define(SKIN_TEXTURE_SIGNATURE, "");
         this.entityData.define(CAN_PLACE_BLOCKS, true);
     }
 
@@ -452,6 +458,40 @@ public class BotEntity extends PathfinderMob {
     }
 
     /**
+     * Get the skin texture value (Base64 encoded texture data)
+     * @return The texture value, or empty string if not set
+     */
+    public String getSkinTextureValue() {
+        return this.entityData.get(SKIN_TEXTURE_VALUE);
+    }
+
+    /**
+     * Set the skin texture value (Base64 encoded texture data)
+     * Synchronized across client and server
+     * @param value The texture value
+     */
+    public void setSkinTextureValue(String value) {
+        this.entityData.set(SKIN_TEXTURE_VALUE, value != null ? value : "");
+    }
+
+    /**
+     * Get the skin texture signature
+     * @return The texture signature, or empty string if not set
+     */
+    public String getSkinTextureSignature() {
+        return this.entityData.get(SKIN_TEXTURE_SIGNATURE);
+    }
+
+    /**
+     * Set the skin texture signature
+     * Synchronized across client and server
+     * @param signature The texture signature
+     */
+    public void setSkinTextureSignature(String signature) {
+        this.entityData.set(SKIN_TEXTURE_SIGNATURE, signature != null ? signature : "");
+    }
+
+    /**
      * Check if the bot can place blocks
      * @return true if can place blocks
      */
@@ -578,6 +618,10 @@ public class BotEntity extends PathfinderMob {
             tag.putUUID("PlayerUUID", playerUUID);
         }
 
+        // Save skin textures (from synced data)
+        tag.putString("SkinTextureValue", getSkinTextureValue());
+        tag.putString("SkinTextureSignature", getSkinTextureSignature());
+
         // Save building toggle (from synced data)
         tag.putBoolean("CanPlaceBlocks", canPlaceBlocks());
 
@@ -636,6 +680,14 @@ public class BotEntity extends PathfinderMob {
         // Load player UUID for Mojang skin (into synced data)
         if (tag.hasUUID("PlayerUUID")) {
             setPlayerUUID(tag.getUUID("PlayerUUID"));
+        }
+
+        // Load skin textures (into synced data)
+        if (tag.contains("SkinTextureValue")) {
+            setSkinTextureValue(tag.getString("SkinTextureValue"));
+        }
+        if (tag.contains("SkinTextureSignature")) {
+            setSkinTextureSignature(tag.getString("SkinTextureSignature"));
         }
 
         // Load building toggle (into synced data)

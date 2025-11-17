@@ -4,6 +4,7 @@ import com.aibrigade.bots.BotEntity;
 import com.aibrigade.bots.MojangSkinFetcher;
 import com.aibrigade.main.AIBrigadeMod;
 import com.mojang.authlib.GameProfile;
+import com.mojang.authlib.properties.Property;
 import com.mojang.authlib.minecraft.MinecraftSessionService;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
@@ -52,44 +53,56 @@ public class BotPlayerSkinRenderer extends LivingEntityRenderer<BotEntity, Playe
 
     /**
      * Récupère la texture (skin) pour ce bot
-     * Charge automatiquement les skins Mojang depuis les serveurs via le SkinManager
+     * Utilise les textures synchronisées depuis le serveur
      */
     @Override
     public ResourceLocation getTextureLocation(BotEntity bot) {
         UUID playerUUID = bot.getPlayerUUID();
         String botName = bot.getBotName();
+        String textureValue = bot.getSkinTextureValue();
+        String textureSignature = bot.getSkinTextureSignature();
 
+        // Si pas d'UUID, retourner le skin par défaut
         if (playerUUID == null) {
             return DEFAULT_STEVE_SKIN;
         }
 
         try {
-            // Make botName final for lambda usage
             final String finalBotName = (botName == null || botName.isEmpty()) ? "Bot" : botName;
-
-            GameProfile profile = new GameProfile(playerUUID, finalBotName);
             Minecraft minecraft = Minecraft.getInstance();
 
-            // Utiliser registerSkins pour charger le profil complet depuis Mojang
-            // C'est la méthode que Minecraft utilise pour les vrais joueurs
-            if (!SKIN_LOAD_INITIATED.containsKey(playerUUID)) {
-                SKIN_LOAD_INITIATED.put(playerUUID, true);
+            // Créer le GameProfile avec les textures
+            GameProfile profile = new GameProfile(playerUUID, finalBotName);
 
-                // registerSkins télécharge automatiquement les textures depuis Mojang
-                minecraft.getSkinManager().registerSkins(profile, (type, location, profileTexture) -> {
-                    // Force entity to refresh visually after skin loads
-                    // This ensures the renderer is called again with the new skin
-                    if (minecraft.level != null && bot.isAlive()) {
-                        bot.refreshDimensions();
-                    }
-                }, true);
+            // Si on a les textures synchronisées du serveur, les ajouter au profil
+            if (textureValue != null && !textureValue.isEmpty()) {
+                // Ajouter la property "textures" avec value et signature
+                Property textureProperty;
+                if (textureSignature != null && !textureSignature.isEmpty()) {
+                    textureProperty = new Property("textures", textureValue, textureSignature);
+                } else {
+                    textureProperty = new Property("textures", textureValue);
+                }
+                profile.getProperties().put("textures", textureProperty);
+
+                // Enregistrer le profil avec le SkinManager pour charger la texture
+                if (!SKIN_LOAD_INITIATED.containsKey(playerUUID)) {
+                    SKIN_LOAD_INITIATED.put(playerUUID, true);
+                    minecraft.getSkinManager().registerSkins(profile, (type, location, profileTexture) -> {
+                        // Skin loaded callback - force re-render
+                        if (minecraft.level != null && bot.isAlive()) {
+                            bot.refreshDimensions();
+                        }
+                    }, true);
+                }
             }
 
-            // Retourner la texture (sera Steve jusqu'à ce que le téléchargement soit terminé)
+            // Retourner la texture depuis le skin manager
             return minecraft.getSkinManager().getInsecureSkinLocation(profile);
 
         } catch (Exception e) {
-            AIBrigadeMod.LOGGER.error("[BotSkinRenderer] ERROR for {}: {}", (botName != null ? botName : "Unknown"), e.getMessage(), e);
+            AIBrigadeMod.LOGGER.error("[BotSkinRenderer] Error loading skin for {}: {}",
+                (botName != null ? botName : "Unknown"), e.getMessage());
             return DEFAULT_STEVE_SKIN;
         }
     }

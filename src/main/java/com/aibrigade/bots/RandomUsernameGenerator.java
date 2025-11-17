@@ -63,33 +63,87 @@ public class RandomUsernameGenerator {
         "Redstone", "Lapis", "Coal", "Quartz", "Netherite"
     };
 
-    // Suffixes numériques courants
+    // Suffixes numériques courants (plus réalistes pour vrais joueurs)
     private static final String[] NUMBER_PATTERNS = {
-        "123", "456", "789", "99", "88", "77", "1234", "420", "69",
-        "2000", "2001", "2010", "13", "21", "42", "100", "1000",
-        "YT", "HD", "4K", "XD", "OP", "GG"
+        "1", "2", "3", "12", "23", "01", "02", "10", "11", "13",
+        "21", "22", "42", "69", "99", "100", "123", "420", "666", "777", "888", "999",
+        "2015", "2016", "2017", "2018", "2019", "2020", "2021", "2022", "2023", "2024",
+        "YT", "HD", "4K", "XD", "OP", "GG", "TTV", "TV"
+    };
+
+    // Noms courts et simples (plus probable d'être des vrais joueurs)
+    private static final String[] SHORT_NAMES = {
+        "Max", "Sam", "Alex", "Tom", "Ben", "Dan", "Tim", "Jim", "Bob", "Joe",
+        "Leo", "Ray", "Jay", "Sky", "Kai", "Rio", "Ace", "Rex", "Zoe", "Mia",
+        "Ava", "Ivy", "Eve", "Amy", "Lily", "Luna", "Nova", "Aria", "Ella",
+        "Pro", "God", "King", "Boss", "Noob", "Epic", "Cool", "Best"
     };
 
     /**
      * Génère un pseudo aléatoire de style Minecraft
+     * Favorise les patterns plus susceptibles d'être de vrais joueurs
      *
      * @return Un pseudo aléatoire
      */
     public static String generateRandomUsername() {
-        int pattern = RANDOM.nextInt(10);
+        int pattern = RANDOM.nextInt(15);
 
         return switch (pattern) {
-            case 0 -> generatePrefixSuffix(); // DarkSlayer
-            case 1 -> generatePrefixSuffixNumber(); // DarkSlayer123
-            case 2 -> generatePrefixGenericName(); // DarkSteve
-            case 3 -> generateGenericNameSuffix(); // SteveKiller
+            case 0, 1 -> generateShortNameNumber(); // Max123, Sam2020 (plus probable)
+            case 2 -> generateShortNameUnderscore(); // Max_Pro, Sam_YT (plus probable)
+            case 3 -> generateSingleWithNumber(); // Shadow99
             case 4 -> generateGenericNameNumber(); // Steve123
-            case 5 -> generateSingleWithNumber(); // Shadow99
-            case 6 -> generateTripleWord(); // DarkTheSlayer
-            case 7 -> generateWithUnderscore(); // Dark_Slayer
-            case 8 -> generateXStyleName(); // xDarkSlayerx
+            case 5 -> generatePrefixSuffix(); // DarkSlayer
+            case 6 -> generatePrefixSuffixNumber(); // DarkSlayer123
+            case 7 -> generatePrefixGenericName(); // DarkSteve
+            case 8 -> generateGenericNameSuffix(); // SteveKiller
+            case 9 -> generateWithUnderscore(); // Dark_Slayer
+            case 10 -> generateShortDouble(); // MaxPro, BenGamer
+            case 11 -> generateXStyleName(); // xDarkSlayerx
+            case 12 -> generateTripleWord(); // DarkTheSlayer
+            case 13 -> generateSimpleShort(); // Max, Sky, Pro
             default -> generateSimpleName(); // DarkWarrior
         };
+    }
+
+    /**
+     * Pattern: Short Name + Number
+     * Exemples: Max123, Sam2020, Pro99 (très courant chez vrais joueurs)
+     */
+    private static String generateShortNameNumber() {
+        String name = SHORT_NAMES[RANDOM.nextInt(SHORT_NAMES.length)];
+        String number = NUMBER_PATTERNS[RANDOM.nextInt(NUMBER_PATTERNS.length)];
+        return name + number;
+    }
+
+    /**
+     * Pattern: Short Name + Underscore + Word
+     * Exemples: Max_Pro, Sam_YT, Pro_Gamer
+     */
+    private static String generateShortNameUnderscore() {
+        String name = SHORT_NAMES[RANDOM.nextInt(SHORT_NAMES.length)];
+        String suffix = RANDOM.nextBoolean()
+            ? NUMBER_PATTERNS[RANDOM.nextInt(NUMBER_PATTERNS.length)]
+            : SHORT_NAMES[RANDOM.nextInt(SHORT_NAMES.length)];
+        return name + "_" + suffix;
+    }
+
+    /**
+     * Pattern: Two short words
+     * Exemples: MaxPro, BenGamer, ProKing
+     */
+    private static String generateShortDouble() {
+        String name1 = SHORT_NAMES[RANDOM.nextInt(SHORT_NAMES.length)];
+        String name2 = SHORT_NAMES[RANDOM.nextInt(SHORT_NAMES.length)];
+        return name1 + name2;
+    }
+
+    /**
+     * Pattern: Simple short name
+     * Exemples: Max, Sky, Pro (3-4 lettres, très communs)
+     */
+    private static String generateSimpleShort() {
+        return SHORT_NAMES[RANDOM.nextInt(SHORT_NAMES.length)];
     }
 
     /**

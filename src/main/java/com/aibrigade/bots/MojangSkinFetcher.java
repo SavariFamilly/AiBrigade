@@ -39,38 +39,12 @@ public class MojangSkinFetcher {
     private static final String SESSION_SERVER_URL = "https://sessionserver.mojang.com/session/minecraft/profile/";
     private static final String USERNAME_TO_UUID_URL = "https://api.mojang.com/users/profiles/minecraft/";
 
-    // Liste de joueurs célèbres avec des skins personnalisés garantis
-    private static final String[] FAMOUS_PLAYERS = {
-        "Notch",           // Créateur de Minecraft
-        "jeb_",            // Développeur Mojang
-        "Dinnerbone",      // Développeur Mojang
-        "Grumm",           // Développeur Mojang
-        "Dream",           // YouTubeur célèbre
-        "Technoblade",     // YouTubeur célèbre (RIP)
-        "Ph1LzA",          // YouTubeur
-        "TommyInnit",      // YouTubeur
-        "Tubbo",           // YouTubeur
-        "Ranboo",          // YouTubeur
-        "WilburSoot",      // YouTubeur/Musicien
-        "CaptainSparklez", // YouTubeur
-        "Skeppy",          // YouTubeur
-        "BadBoyHalo",      // YouTubeur
-        "GeorgeNotFound",  // YouTubeur
-        "Sapnap",          // YouTubeur
-        "Punz",            // YouTubeur
-        "awesamdude",      // YouTubeur
-        "Foolish_Gamers",  // YouTubeur
-        "Quackity",        // YouTubeur
-        "KarlJacobs",      // YouTubeur
-        "Nihachu",         // YouTubeuse
-        "Eret",            // YouTubeur
-        "Antfrost",        // YouTubeur
-        "Ponk",            // YouTubeur
-    };
-    private static int famousPlayerIndex = 0; // Index pour rotation
-
     // Tracking used player UUIDs to ensure uniqueness
     private static final Set<UUID> USED_PLAYER_UUIDS = ConcurrentHashMap.newKeySet();
+
+    // Cache de joueurs vérifiés avec skins (pour réutilisation rapide)
+    private static final List<String> VERIFIED_PLAYERS_WITH_SKINS = new ArrayList<>();
+    private static int verifiedPlayerIndex = 0;
 
     // Cache nom -> UUID pour éviter les requêtes répétées
     private static final Map<String, UUID> NAME_TO_UUID_CACHE = new ConcurrentHashMap<>();
@@ -428,24 +402,60 @@ public class MojangSkinFetcher {
 
     /**
      * Récupère et applique un skin aléatoire à un bot
-     * Utilise la liste de joueurs célèbres avec des skins personnalisés
+     * Stratégie intelligente avec cache de joueurs vérifiés
      */
     public static void applyRandomFamousSkin(BotEntity bot) {
-        // Sélectionner un joueur célèbre de la liste (rotation)
-        String username = FAMOUS_PLAYERS[famousPlayerIndex % FAMOUS_PLAYERS.length];
-        famousPlayerIndex++;
+        // Si on a des joueurs en cache, les utiliser en priorité
+        if (!VERIFIED_PLAYERS_WITH_SKINS.isEmpty()) {
+            String username = VERIFIED_PLAYERS_WITH_SKINS.get(verifiedPlayerIndex % VERIFIED_PLAYERS_WITH_SKINS.size());
+            verifiedPlayerIndex++;
 
-        com.aibrigade.main.AIBrigadeMod.LOGGER.info("Applying famous player skin: {}", username);
+            com.aibrigade.main.AIBrigadeMod.LOGGER.info("Using cached player: {}", username);
+            applyPlayerSkin(bot, username);
+            return;
+        }
+
+        // Sinon, chercher un nouveau joueur existant
+        com.aibrigade.main.AIBrigadeMod.LOGGER.info("Searching for random player with skin...");
+        bot.setBotName("Searching...");
+
+        // Chercher un joueur existant (max 50 tentatives pour augmenter les chances)
+        findRandomExistingPlayer(50).thenAccept(username -> {
+            if (username == null) {
+                // Fallback : utiliser un nom généré
+                com.aibrigade.main.AIBrigadeMod.LOGGER.warn("Could not find player after 50 attempts, using fallback");
+                UUID fallbackUUID = UUID.randomUUID();
+                bot.setPlayerUUID(fallbackUUID);
+                bot.setBotName("Bot_" + fallbackUUID.toString().substring(0, 8));
+
+                if (!bot.level().isClientSide && bot.isAlive()) {
+                    bot.refreshDimensions();
+                }
+                return;
+            }
+
+            // Joueur trouvé ! L'ajouter au cache
+            if (!VERIFIED_PLAYERS_WITH_SKINS.contains(username)) {
+                VERIFIED_PLAYERS_WITH_SKINS.add(username);
+                com.aibrigade.main.AIBrigadeMod.LOGGER.info("✓ Added {} to verified players cache (total: {})",
+                    username, VERIFIED_PLAYERS_WITH_SKINS.size());
+            }
+
+            applyPlayerSkin(bot, username);
+        });
+    }
+
+    /**
+     * Applique le skin d'un joueur spécifique à un bot
+     */
+    private static void applyPlayerSkin(BotEntity bot, String username) {
+        com.aibrigade.main.AIBrigadeMod.LOGGER.info("Applying player skin: {}", username);
         bot.setBotName(username);
 
         // Récupérer l'UUID du joueur
         getUUIDFromUsername(username).thenAccept(uuid -> {
             if (uuid == null) {
-                com.aibrigade.main.AIBrigadeMod.LOGGER.error("Failed to get UUID for famous player: {}", username);
-                // Fallback : essayer le prochain dans la liste
-                famousPlayerIndex++;
-                String nextUsername = FAMOUS_PLAYERS[famousPlayerIndex % FAMOUS_PLAYERS.length];
-                applyRandomFamousSkin(bot);
+                com.aibrigade.main.AIBrigadeMod.LOGGER.error("Failed to get UUID for player: {}", username);
                 return;
             }
 

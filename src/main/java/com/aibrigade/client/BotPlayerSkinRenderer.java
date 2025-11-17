@@ -62,8 +62,15 @@ public class BotPlayerSkinRenderer extends LivingEntityRenderer<BotEntity, Playe
         String textureValue = bot.getSkinTextureValue();
         String textureSignature = bot.getSkinTextureSignature();
 
+        AIBrigadeMod.LOGGER.info("[Renderer] Getting texture for {} (UUID: {})", botName, playerUUID);
+        AIBrigadeMod.LOGGER.info("[Renderer] Texture value length: {}",
+            textureValue != null ? textureValue.length() : 0);
+        AIBrigadeMod.LOGGER.info("[Renderer] Texture signature length: {}",
+            textureSignature != null ? textureSignature.length() : 0);
+
         // Si pas d'UUID, retourner le skin par défaut
         if (playerUUID == null) {
+            AIBrigadeMod.LOGGER.warn("[Renderer] No UUID, returning default skin");
             return DEFAULT_STEVE_SKIN;
         }
 
@@ -76,6 +83,8 @@ public class BotPlayerSkinRenderer extends LivingEntityRenderer<BotEntity, Playe
 
             // Si on a les textures synchronisées du serveur, les ajouter au profil
             if (textureValue != null && !textureValue.isEmpty()) {
+                AIBrigadeMod.LOGGER.info("[Renderer] Applying textures to profile for {}", finalBotName);
+
                 // Ajouter la property "textures" avec value et signature
                 Property textureProperty;
                 if (textureSignature != null && !textureSignature.isEmpty()) {
@@ -88,17 +97,25 @@ public class BotPlayerSkinRenderer extends LivingEntityRenderer<BotEntity, Playe
                 // Enregistrer le profil avec le SkinManager pour charger la texture
                 if (!SKIN_LOAD_INITIATED.containsKey(playerUUID)) {
                     SKIN_LOAD_INITIATED.put(playerUUID, true);
+                    AIBrigadeMod.LOGGER.info("[Renderer] Registering skins with SkinManager for {}", finalBotName);
                     minecraft.getSkinManager().registerSkins(profile, (type, location, profileTexture) -> {
+                        AIBrigadeMod.LOGGER.info("[Renderer] ✓ Skin loaded! Type: {}, Location: {}", type, location);
                         // Skin loaded callback - force re-render
                         if (minecraft.level != null && bot.isAlive()) {
                             bot.refreshDimensions();
                         }
                     }, true);
+                } else {
+                    AIBrigadeMod.LOGGER.info("[Renderer] Skins already registered for {}", finalBotName);
                 }
+            } else {
+                AIBrigadeMod.LOGGER.warn("[Renderer] ⚠ No texture data for {}, will use default", finalBotName);
             }
 
             // Retourner la texture depuis le skin manager
-            return minecraft.getSkinManager().getInsecureSkinLocation(profile);
+            ResourceLocation skinLocation = minecraft.getSkinManager().getInsecureSkinLocation(profile);
+            AIBrigadeMod.LOGGER.info("[Renderer] Returning skin location: {}", skinLocation);
+            return skinLocation;
 
         } catch (Exception e) {
             AIBrigadeMod.LOGGER.error("[BotSkinRenderer] Error loading skin for {}: {}",

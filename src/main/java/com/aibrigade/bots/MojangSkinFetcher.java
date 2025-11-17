@@ -39,6 +39,36 @@ public class MojangSkinFetcher {
     private static final String SESSION_SERVER_URL = "https://sessionserver.mojang.com/session/minecraft/profile/";
     private static final String USERNAME_TO_UUID_URL = "https://api.mojang.com/users/profiles/minecraft/";
 
+    // Liste de joueurs célèbres avec des skins personnalisés garantis
+    private static final String[] FAMOUS_PLAYERS = {
+        "Notch",           // Créateur de Minecraft
+        "jeb_",            // Développeur Mojang
+        "Dinnerbone",      // Développeur Mojang
+        "Grumm",           // Développeur Mojang
+        "Dream",           // YouTubeur célèbre
+        "Technoblade",     // YouTubeur célèbre (RIP)
+        "Ph1LzA",          // YouTubeur
+        "TommyInnit",      // YouTubeur
+        "Tubbo",           // YouTubeur
+        "Ranboo",          // YouTubeur
+        "WilburSoot",      // YouTubeur/Musicien
+        "CaptainSparklez", // YouTubeur
+        "Skeppy",          // YouTubeur
+        "BadBoyHalo",      // YouTubeur
+        "GeorgeNotFound",  // YouTubeur
+        "Sapnap",          // YouTubeur
+        "Punz",            // YouTubeur
+        "awesamdude",      // YouTubeur
+        "Foolish_Gamers",  // YouTubeur
+        "Quackity",        // YouTubeur
+        "KarlJacobs",      // YouTubeur
+        "Nihachu",         // YouTubeuse
+        "Eret",            // YouTubeur
+        "Antfrost",        // YouTubeur
+        "Ponk",            // YouTubeur
+    };
+    private static int famousPlayerIndex = 0; // Index pour rotation
+
     // Tracking used player UUIDs to ensure uniqueness
     private static final Set<UUID> USED_PLAYER_UUIDS = ConcurrentHashMap.newKeySet();
 
@@ -353,17 +383,37 @@ public class MojangSkinFetcher {
      * Extrait les textures et les synchronise au client
      */
     public static void applyProfileToBot(BotEntity bot, GameProfile profile) {
+        com.aibrigade.main.AIBrigadeMod.LOGGER.info("[ApplyProfile] Starting for {} (UUID: {})",
+            profile.getName(), profile.getId());
+
         // Stocker l'UUID du profil
         bot.setPlayerUUID(profile.getId());
 
         // Stocker le nom
         bot.setBotName(profile.getName());
 
+        // Debug: Afficher toutes les properties du profil
+        com.aibrigade.main.AIBrigadeMod.LOGGER.info("[ApplyProfile] Profile properties count: {}",
+            profile.getProperties().size());
+        profile.getProperties().keys().forEach(key -> {
+            com.aibrigade.main.AIBrigadeMod.LOGGER.info("[ApplyProfile] Property key: {}", key);
+        });
+
         // Extraire les textures du profil Mojang
         if (profile.getProperties().containsKey("textures")) {
             Property textureProperty = profile.getProperties().get("textures").iterator().next();
             String value = textureProperty.getValue();
             String signature = textureProperty.getSignature();
+
+            com.aibrigade.main.AIBrigadeMod.LOGGER.info("[ApplyProfile] Texture value length: {}",
+                value != null ? value.length() : 0);
+            com.aibrigade.main.AIBrigadeMod.LOGGER.info("[ApplyProfile] Texture signature length: {}",
+                signature != null ? signature.length() : 0);
+
+            if (value != null && value.length() > 50) {
+                com.aibrigade.main.AIBrigadeMod.LOGGER.info("[ApplyProfile] Texture value preview: {}...",
+                    value.substring(0, 50));
+            }
 
             // Appliquer les textures au bot (synchronisé au client)
             bot.setSkinTextureValue(value);
@@ -372,68 +422,54 @@ public class MojangSkinFetcher {
             com.aibrigade.main.AIBrigadeMod.LOGGER.info("✓ Skin textures applied to bot {} (UUID: {})",
                 profile.getName(), profile.getId());
         } else {
-            com.aibrigade.main.AIBrigadeMod.LOGGER.warn("Profile {} has no textures!", profile.getName());
+            com.aibrigade.main.AIBrigadeMod.LOGGER.warn("⚠ Profile {} has no textures property!", profile.getName());
         }
     }
 
     /**
      * Récupère et applique un skin aléatoire à un bot
-     * Génère des pseudos aléatoires et trouve un qui existe vraiment
+     * Utilise la liste de joueurs célèbres avec des skins personnalisés
      */
     public static void applyRandomFamousSkin(BotEntity bot) {
-        // Appliquer un nom temporaire
-        bot.setBotName("Searching_Player");
+        // Sélectionner un joueur célèbre de la liste (rotation)
+        String username = FAMOUS_PLAYERS[famousPlayerIndex % FAMOUS_PLAYERS.length];
+        famousPlayerIndex++;
 
-        // Chercher un joueur existant (max 20 tentatives)
-        findRandomExistingPlayer(20).thenAccept(username -> {
-            if (username == null) {
-                // Fallback : utiliser un nom généré
-                UUID fallbackUUID = UUID.randomUUID();
-                bot.setPlayerUUID(fallbackUUID);
-                bot.setBotName("Bot_" + fallbackUUID.toString().substring(0, 8));
+        com.aibrigade.main.AIBrigadeMod.LOGGER.info("Applying famous player skin: {}", username);
+        bot.setBotName(username);
 
-                // Force client sync for fallback UUID
-                if (!bot.level().isClientSide && bot.isAlive()) {
-                    bot.refreshDimensions();
-                }
+        // Récupérer l'UUID du joueur
+        getUUIDFromUsername(username).thenAccept(uuid -> {
+            if (uuid == null) {
+                com.aibrigade.main.AIBrigadeMod.LOGGER.error("Failed to get UUID for famous player: {}", username);
+                // Fallback : essayer le prochain dans la liste
+                famousPlayerIndex++;
+                String nextUsername = FAMOUS_PLAYERS[famousPlayerIndex % FAMOUS_PLAYERS.length];
+                applyRandomFamousSkin(bot);
                 return;
             }
 
-            // Récupérer l'UUID du joueur trouvé
-            getUUIDFromUsername(username).thenAccept(uuid -> {
-                if (uuid == null) {
-                    // Ne devrait pas arriver car on a déjà vérifié
-                    UUID fallbackUUID = UUID.randomUUID();
-                    bot.setPlayerUUID(fallbackUUID);
-                    bot.setBotName("Bot_" + fallbackUUID.toString().substring(0, 8));
+            // Appliquer l'UUID et le nom
+            bot.setPlayerUUID(uuid);
+            bot.setBotName(username);
 
-                    // Force client sync for fallback UUID
+            com.aibrigade.main.AIBrigadeMod.LOGGER.info("Fetching profile for {} (UUID: {})", username, uuid);
+
+            // Fetch le profil complet avec les textures depuis Mojang
+            fetchProfileAsync(uuid).thenAccept(profile -> {
+                if (profile != null) {
+                    com.aibrigade.main.AIBrigadeMod.LOGGER.info("Profile fetched for {}, applying textures...", username);
+
+                    // Appliquer le profil complet avec textures
+                    applyProfileToBot(bot, profile);
+
+                    // Force entity data sync to all tracking players
                     if (!bot.level().isClientSide && bot.isAlive()) {
                         bot.refreshDimensions();
                     }
-                    return;
+                } else {
+                    com.aibrigade.main.AIBrigadeMod.LOGGER.error("Profile is null for {}", username);
                 }
-
-                // Marquer comme utilisé
-                USED_PLAYER_UUIDS.add(uuid);
-
-                // Appliquer l'UUID et le nom
-                bot.setPlayerUUID(uuid);
-                bot.setBotName(username);
-
-                // Fetch le profil complet en arrière-plan pour les textures
-                fetchProfileAsync(uuid).thenAccept(profile -> {
-                    if (profile != null) {
-                        // Appliquer le profil complet avec textures
-                        applyProfileToBot(bot, profile);
-
-                        // Force entity data sync to all tracking players
-                        if (!bot.level().isClientSide && bot.isAlive()) {
-                            // Refresh entity dimensions to trigger a full sync packet
-                            bot.refreshDimensions();
-                        }
-                    }
-                });
             });
         });
     }

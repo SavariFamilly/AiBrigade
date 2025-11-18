@@ -164,8 +164,8 @@ public class BotEntity extends PathfinderMob {
     public static AttributeSupplier.Builder createAttributes() {
         return PathfinderMob.createMobAttributes()
             .add(Attributes.MAX_HEALTH, 20.0D)
-            .add(Attributes.MOVEMENT_SPEED, 0.35D) // Augmenté pour plus de mouvement
-            .add(Attributes.ATTACK_DAMAGE, 3.0D) // Augmenté pour combat
+            .add(Attributes.MOVEMENT_SPEED, 0.1D) // Vitesse identique au joueur
+            .add(Attributes.ATTACK_DAMAGE, 3.0D)
             .add(Attributes.ARMOR, 2.0D)
             .add(Attributes.FOLLOW_RANGE, 32.0D)
             .add(Attributes.KNOCKBACK_RESISTANCE, 0.0D);

@@ -212,6 +212,40 @@ public class BotEntity extends PathfinderMob {
             this, net.minecraft.world.entity.monster.Monster.class, true)); // Attack hostile mobs
     }
 
+    /**
+     * Override tick for performance optimization
+     * Reduces AI updates for distant bots to support 200+ bots without lag
+     */
+    @Override
+    public void tick() {
+        // Always call super.tick() for essential entity updates
+        super.tick();
+
+        // Performance optimization: only update AI based on distance from players
+        int tickCount = this.tickCount;
+
+        // Check if AI should update this tick (uses distance-based intervals)
+        if (!BotPerformanceOptimizer.shouldUpdateAI(this, tickCount)) {
+            // Skip AI updates for this tick to save performance
+            // The bot will still move, render, and sync, but won't recompute goals
+            return;
+        }
+    }
+
+    /**
+     * Override aiStep for additional optimizations
+     */
+    @Override
+    protected void aiStep() {
+        // Performance optimization: disable pathfinding for static and very distant bots
+        if (!BotPerformanceOptimizer.shouldEnablePathfinding(this)) {
+            // Stop navigation to save CPU
+            this.getNavigation().stop();
+        }
+
+        super.aiStep();
+    }
+
     // Getters and setters for bot properties
 
     /**

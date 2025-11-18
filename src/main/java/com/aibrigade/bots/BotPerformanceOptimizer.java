@@ -45,6 +45,11 @@ public class BotPerformanceOptimizer {
             return false;
         }
 
+        // Bots following a leader should update more frequently (every 2 ticks for smooth movement)
+        if (bot.isFollowingLeader() && bot.getLeaderId() != null) {
+            return tickCount % 2 == 0;
+        }
+
         // Get nearest player distance
         double nearestPlayerDistance = getNearestPlayerDistance(bot);
 
@@ -60,16 +65,21 @@ public class BotPerformanceOptimizer {
 
     /**
      * Determine if pathfinding should be enabled for this bot
-     * Disabled for static bots and very distant bots
+     * Disabled for static bots and very distant bots (unless following a leader)
      */
     public static boolean shouldEnablePathfinding(BotEntity bot) {
         if (bot.isStatic()) {
             return false;
         }
 
+        // ALWAYS enable pathfinding for bots that are following a leader
+        if (bot.isFollowingLeader() && bot.getLeaderId() != null) {
+            return true;
+        }
+
         double nearestPlayerDistance = getNearestPlayerDistance(bot);
 
-        // Disable pathfinding for very distant bots
+        // Disable pathfinding for very distant bots (only if not following)
         return nearestPlayerDistance < FAR_DISTANCE;
     }
 

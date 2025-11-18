@@ -196,7 +196,7 @@ public class BotEntity extends PathfinderMob {
         this.goalSelector.addGoal(4, new net.minecraft.world.entity.ai.goal.MeleeAttackGoal(this, 1.2D, false));
 
         // Priorité 5: Wander when idle
-        this.goalSelector.addGoal(5, new net.minecraft.world.entity.ai.goal.WaterAvoidingRandomStrollGoal(this, 0.8D));
+        this.goalSelector.addGoal(5, new net.minecraft.world.entity.ai.goal.WaterAvoidingRandomStrollGoal(this, 1.0D));
 
         // Priorité 6: Look at player (secondaire car ActiveGazeBehavior gère déjà)
         this.goalSelector.addGoal(6, new net.minecraft.world.entity.ai.goal.LookAtPlayerGoal(this, Player.class, 8.0F));

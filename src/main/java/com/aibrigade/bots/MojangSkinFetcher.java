@@ -448,7 +448,7 @@ public class MojangSkinFetcher {
     /**
      * Applique le skin d'un joueur spécifique à un bot
      */
-    private static void applyPlayerSkin(BotEntity bot, String username) {
+    public static void applyPlayerSkin(BotEntity bot, String username) {
         com.aibrigade.main.AIBrigadeMod.LOGGER.info("Applying player skin: {}", username);
         bot.setBotName(username);
 

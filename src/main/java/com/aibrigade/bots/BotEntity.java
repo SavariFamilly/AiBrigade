@@ -246,6 +246,32 @@ public class BotEntity extends PathfinderMob {
         super.aiStep();
     }
 
+    /**
+     * Override to prevent slowdown from snow, soul sand, honey, etc.
+     * Bots maintain normal speed on all block types
+     */
+    @Override
+    public float getBlockSpeedFactor() {
+        // Always return 1.0 (no slowdown from blocks)
+        return 1.0F;
+    }
+
+    /**
+     * Override to prevent freezing in powder snow
+     */
+    @Override
+    public boolean canFreeze() {
+        return false;
+    }
+
+    /**
+     * Override to prevent being stuck in webs
+     */
+    @Override
+    public boolean isAffectedByFluids() {
+        return true; // Still affected by water/lava, just not slowed by blocks
+    }
+
     // Getters and setters for bot properties
 
     /**

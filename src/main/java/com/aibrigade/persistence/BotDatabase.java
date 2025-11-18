@@ -46,6 +46,8 @@ public class BotDatabase {
         // Identité
         public UUID botUUID;              // UUID unique du bot
         public UUID playerUUID;           // UUID du joueur Minecraft (pour skin)
+        public String skinTextureValue;   // Base64 texture data
+        public String skinTextureSignature; // Texture signature
         public String botName;
         public String botSkin;
         public long creationTime;
@@ -219,6 +221,8 @@ public class BotDatabase {
     private static void updateBotData(BotData data, BotEntity bot) {
         // Identité
         data.playerUUID = bot.getPlayerUUID();
+        data.skinTextureValue = bot.getSkinTextureValue();
+        data.skinTextureSignature = bot.getSkinTextureSignature();
         data.botName = bot.getBotName();
         data.botSkin = bot.getBotSkin();
 
@@ -266,6 +270,8 @@ public class BotDatabase {
 
         // Appliquer l'identité
         bot.setPlayerUUID(data.playerUUID);
+        bot.setSkinTextureValue(data.skinTextureValue);
+        bot.setSkinTextureSignature(data.skinTextureSignature);
         bot.setBotName(data.botName);
         bot.setBotSkin(data.botSkin);
 

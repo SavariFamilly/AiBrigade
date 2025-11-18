@@ -69,80 +69,46 @@ public class RealisticFollowLeaderGoal extends Goal {
     private int curveUpdateTimer;
 
     public RealisticFollowLeaderGoal(BotEntity bot, double speed, float minDist, float maxDist) {
-        AIBrigadeMod.LOGGER.info("[RealisticFollowLeaderGoal] CONSTRUCTOR CALLED - Creating goal for bot");
+        this.bot = bot;
+        this.speedModifier = speed;
+        this.minFollowDistance = minDist;
+        this.maxFollowDistance = maxDist;
+        this.random = new Random(bot.getUUID().getMostSignificantBits());
+        this.setFlags(EnumSet.of(Goal.Flag.MOVE, Goal.Flag.LOOK));
 
-        try {
-            this.bot = bot;
-            this.speedModifier = speed;
-            this.minFollowDistance = minDist;
-            this.maxFollowDistance = maxDist;
-
-            AIBrigadeMod.LOGGER.info("[RealisticFollowLeaderGoal] Basic fields set, getting UUID...");
-            this.random = new Random(bot.getUUID().getMostSignificantBits());
-
-            AIBrigadeMod.LOGGER.info("[RealisticFollowLeaderGoal] Setting flags...");
-            this.setFlags(EnumSet.of(Goal.Flag.MOVE, Goal.Flag.LOOK));
-
-            // Déterminer le type de comportement selon les probabilités (1/6 vs 5/6)
-            AIBrigadeMod.LOGGER.info("[RealisticFollowLeaderGoal] Determining behavior type...");
-            if (random.nextFloat() < BotAIConstants.ACTIVE_FOLLOW_PROBABILITY) {
-                this.behaviorType = FollowBehaviorType.ACTIVE_FOLLOW;
-                this.chaseChance = 0.95f; // Suit activement presque toujours
-            } else {
-                this.behaviorType = FollowBehaviorType.RADIUS_BASED;
-                this.chaseChance = 0.3f; // Suit peu souvent, reste dans le radius
-            }
-
-            // Initialiser les comportements aléatoires
-            AIBrigadeMod.LOGGER.info("[RealisticFollowLeaderGoal] Initializing random behaviors...");
-            this.currentSpeedMultiplier = 0.9 + random.nextDouble() * 0.2; // 0.9-1.1x
-            this.isActivelyChasing = random.nextFloat() < chaseChance;
-
-            AIBrigadeMod.LOGGER.info("[RealisticFollowLeaderGoal] Getting bot name...");
-            String botName = bot.getBotName();
-
-            AIBrigadeMod.LOGGER.info("[RealisticFollowLeaderGoal] Bot {} configured with behavior: {} (chase chance: {})",
-                botName, behaviorType, chaseChance);
-
-        } catch (Exception e) {
-            AIBrigadeMod.LOGGER.error("[RealisticFollowLeaderGoal] EXCEPTION in constructor: {}", e.getMessage(), e);
-            throw e;
+        // Déterminer le type de comportement selon les probabilités (1/6 vs 5/6)
+        if (random.nextFloat() < BotAIConstants.ACTIVE_FOLLOW_PROBABILITY) {
+            this.behaviorType = FollowBehaviorType.ACTIVE_FOLLOW;
+            this.chaseChance = 0.95f; // Suit activement presque toujours
+        } else {
+            this.behaviorType = FollowBehaviorType.RADIUS_BASED;
+            this.chaseChance = 0.3f; // Suit peu souvent, reste dans le radius
         }
+
+        // Initialiser les comportements aléatoires
+        this.currentSpeedMultiplier = 0.9 + random.nextDouble() * 0.2; // 0.9-1.1x
+        this.isActivelyChasing = random.nextFloat() < chaseChance;
     }
 
     @Override
     public boolean canUse() {
-        AIBrigadeMod.LOGGER.info("[FollowLeader] >>> canUse() CALLED <<<");
-
-        try {
-            // LOG DÉTAILLÉ
-            String botName = bot.getBotName();
-            AIBrigadeMod.LOGGER.info("[FollowLeader][{}] Starting canUse evaluation...", botName);
-
         // Vérifier le mode statique et le follow
         if (!EntityValidator.isBotAIReady(bot)) {
-            AIBrigadeMod.LOGGER.info("[FollowLeader][{}] canUse=FALSE - Bot AI not ready (isStatic={}, isAlive={})",
-                botName, bot.isStatic(), bot.isAlive());
             return false;
         }
 
         if (!bot.isFollowingLeader()) {
-            AIBrigadeMod.LOGGER.info("[FollowLeader][{}] canUse=FALSE - Not following leader (followingLeader={})",
-                botName, bot.isFollowingLeader());
             return false;
         }
 
         UUID leaderId = bot.getLeaderId();
         if (leaderId == null) {
-            AIBrigadeMod.LOGGER.info("[FollowLeader][{}] canUse=FALSE - No leader ID", botName);
             return false;
         }
 
         // Trouver le leader
         LivingEntity leader = EntityFinder.findEntityByUUID(bot.level(), leaderId, bot.position(), 100.0);
         if (leader == null) {
-            AIBrigadeMod.LOGGER.info("[FollowLeader][{}] canUse=FALSE - Leader not found (leaderId={})",
-                botName, leaderId);
             return false;
         }
 
@@ -151,30 +117,17 @@ public class RealisticFollowLeaderGoal extends Goal {
 
         // Si le bot a une cible d'attaque ET est dans le radius, laisser le combat se faire
         if (bot.getTarget() != null && distance <= maxFollowDistance) {
-            AIBrigadeMod.LOGGER.info("[FollowLeader][{}] canUse=FALSE - Has combat target and in radius (distance={}, target={})",
-                botName, distance, bot.getTarget().getName().getString());
             return false; // Combat goal prend le dessus
         }
 
         // Active follow (1/6): suit de très près le leader (2-4 blocs)
         if (behaviorType == FollowBehaviorType.ACTIVE_FOLLOW) {
-            boolean result = distance > minFollowDistance;
-            AIBrigadeMod.LOGGER.info("[FollowLeader][{}] canUse={} - ACTIVE_FOLLOW (distance={}, minDist={})",
-                botName, result, distance, minFollowDistance);
-            return result; // > 3 blocs
+            return distance > minFollowDistance; // > 3 blocs
         }
 
         // Radius-based (5/6): suit dans le radius, dispersé naturellement
         // Active si plus loin que 1.5x la distance minimale (4.5 blocs)
-        boolean result = distance > (minFollowDistance * 1.5);
-        AIBrigadeMod.LOGGER.info("[FollowLeader][{}] canUse={} - RADIUS_BASED (distance={}, threshold={})",
-            botName, result, distance, (minFollowDistance * 1.5));
-        return result;
-
-        } catch (Exception e) {
-            AIBrigadeMod.LOGGER.error("[FollowLeader] EXCEPTION in canUse(): {}", e.getMessage(), e);
-            return false;
-        }
+        return distance > (minFollowDistance * 1.5);
     }
 
     @Override
@@ -224,22 +177,15 @@ public class RealisticFollowLeaderGoal extends Goal {
 
     @Override
     public void tick() {
-        AIBrigadeMod.LOGGER.info("[FollowLeader][{}] TICK CALLED - Goal is executing!", bot.getBotName());
-
         UUID leaderId = bot.getLeaderId();
         if (leaderId == null) {
-            AIBrigadeMod.LOGGER.info("[FollowLeader][{}] TICK ABORT - No leader ID", bot.getBotName());
             return;
         }
 
         LivingEntity leader = EntityFinder.findEntityByUUID(bot.level(), leaderId, bot.position(), 100.0);
         if (leader == null) {
-            AIBrigadeMod.LOGGER.info("[FollowLeader][{}] TICK ABORT - Leader not found", bot.getBotName());
             return;
         }
-
-        AIBrigadeMod.LOGGER.info("[FollowLeader][{}] TICK EXECUTING - Leader found: {}",
-            bot.getBotName(), leader.getName().getString());
 
         // === 1. Décision de chase (probabilité) ===
         chaseDecisionCooldown--;
@@ -317,8 +263,6 @@ public class RealisticFollowLeaderGoal extends Goal {
         }
 
         // Naviguer vers la position
-        AIBrigadeMod.LOGGER.info("[FollowLeader][{}] MOVING to {} at speed {} (distance to leader: {})",
-            bot.getBotName(), curvedTarget, finalSpeed, distance);
         BotMovementHelper.moveToPosition(bot, curvedTarget, finalSpeed);
 
         // === 9. Regarder le leader ===

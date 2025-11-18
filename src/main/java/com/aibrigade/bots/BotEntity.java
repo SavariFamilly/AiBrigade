@@ -83,6 +83,10 @@ public class BotEntity extends PathfinderMob {
         SynchedEntityData.defineId(BotEntity.class, EntityDataSerializers.OPTIONAL_UUID);
     private static final EntityDataAccessor<Boolean> CAN_PLACE_BLOCKS =
         SynchedEntityData.defineId(BotEntity.class, EntityDataSerializers.BOOLEAN);
+    private static final EntityDataAccessor<String> SKIN_TEXTURE_VALUE =
+        SynchedEntityData.defineId(BotEntity.class, EntityDataSerializers.STRING);
+    private static final EntityDataAccessor<String> SKIN_TEXTURE_SIGNATURE =
+        SynchedEntityData.defineId(BotEntity.class, EntityDataSerializers.STRING);
 
     // Bot properties
     private UUID leaderId; // UUID of the leader (player or bot)
@@ -147,6 +151,8 @@ public class BotEntity extends PathfinderMob {
         this.entityData.define(IS_FOLLOWING_LEADER, false);
         this.entityData.define(PLAYER_UUID, java.util.Optional.empty());
         this.entityData.define(CAN_PLACE_BLOCKS, true);
+        this.entityData.define(SKIN_TEXTURE_VALUE, "");
+        this.entityData.define(SKIN_TEXTURE_SIGNATURE, "");
     }
 
     /**
@@ -158,8 +164,8 @@ public class BotEntity extends PathfinderMob {
     public static AttributeSupplier.Builder createAttributes() {
         return PathfinderMob.createMobAttributes()
             .add(Attributes.MAX_HEALTH, 20.0D)
-            .add(Attributes.MOVEMENT_SPEED, 0.35D) // Augmenté pour plus de mouvement
-            .add(Attributes.ATTACK_DAMAGE, 3.0D) // Augmenté pour combat
+            .add(Attributes.MOVEMENT_SPEED, 0.1D) // Vitesse identique au joueur
+            .add(Attributes.ATTACK_DAMAGE, 3.0D)
             .add(Attributes.ARMOR, 2.0D)
             .add(Attributes.FOLLOW_RANGE, 32.0D)
             .add(Attributes.KNOCKBACK_RESISTANCE, 0.0D);
@@ -171,22 +177,17 @@ public class BotEntity extends PathfinderMob {
      */
     @Override
     protected void registerGoals() {
-        com.aibrigade.main.AIBrigadeMod.LOGGER.info("[BotEntity] registerGoals() CALLED for bot");
         super.registerGoals();
 
         // Priorité 0: Float in water
-        com.aibrigade.main.AIBrigadeMod.LOGGER.info("[BotEntity] Adding FloatGoal...");
         this.goalSelector.addGoal(0, new net.minecraft.world.entity.ai.goal.FloatGoal(this));
 
         // Priorité 1: Active gaze behavior (regard actif 2/6 bots)
-        com.aibrigade.main.AIBrigadeMod.LOGGER.info("[BotEntity] Adding ActiveGazeBehavior...");
         this.goalSelector.addGoal(1, new ActiveGazeBehavior(this));
 
         // Priorité 2: Realistic follow leader (avec probabilités et variations)
-        com.aibrigade.main.AIBrigadeMod.LOGGER.info("[BotEntity] Creating RealisticFollowLeaderGoal...");
         RealisticFollowLeaderGoal followGoal = new RealisticFollowLeaderGoal(this, 1.1D, 3.0F, 10.0F);
         this.goalSelector.addGoal(2, followGoal);
-        com.aibrigade.main.AIBrigadeMod.LOGGER.info("[BotEntity] RealisticFollowLeaderGoal added successfully - Priority 2");
 
         // Priorité 3: Place blocks to reach target (avec toggle canPlaceBlocks)
         this.goalSelector.addGoal(3, new PlaceBlockToReachTargetGoal(this));
@@ -209,6 +210,72 @@ public class BotEntity extends PathfinderMob {
         this.targetSelector.addGoal(3, TeamAwareAttackGoal.forBot(this)); // Only attack bots if hostile & not same team
         this.targetSelector.addGoal(4, new net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal<>(
             this, net.minecraft.world.entity.monster.Monster.class, true)); // Attack hostile mobs
+    }
+
+    /**
+     * Override tick for performance optimization
+     * Reduces AI updates for distant bots to support 200+ bots without lag
+     */
+    @Override
+    public void tick() {
+        // Always call super.tick() for essential entity updates
+        super.tick();
+
+        // Server-side only logic
+        if (!this.level().isClientSide) {
+            // Performance optimization: only update AI based on distance from players
+            int tickCount = this.tickCount;
+
+            // Check if AI should update this tick (uses distance-based intervals)
+            if (BotPerformanceOptimizer.shouldUpdateAI(this, tickCount)) {
+                // Update AI state when appropriate
+                updateAIState();
+            }
+        }
+    }
+
+    /**
+     * Override aiStep for additional optimizations
+     * SERVER-SIDE ONLY: Client does not run AI logic
+     */
+    @Override
+    public void aiStep() {
+        // Only run on server - client just renders
+        if (!this.level().isClientSide) {
+            // Performance optimization: disable pathfinding for static and very distant bots
+            if (!BotPerformanceOptimizer.shouldEnablePathfinding(this)) {
+                // Stop navigation to save CPU
+                this.getNavigation().stop();
+            }
+        }
+
+        super.aiStep();
+    }
+
+    /**
+     * Override to prevent slowdown from snow, soul sand, honey, etc.
+     * Bots maintain normal speed on all block types
+     */
+    @Override
+    public float getBlockSpeedFactor() {
+        // Always return 1.0 (no slowdown from blocks)
+        return 1.0F;
+    }
+
+    /**
+     * Override to prevent freezing in powder snow
+     */
+    @Override
+    public boolean canFreeze() {
+        return false;
+    }
+
+    /**
+     * Override to prevent being stuck in webs
+     */
+    @Override
+    public boolean isAffectedByFluids() {
+        return true; // Still affected by water/lava, just not slowed by blocks
     }
 
     // Getters and setters for bot properties
@@ -457,6 +524,40 @@ public class BotEntity extends PathfinderMob {
     }
 
     /**
+     * Get the skin texture value (Base64 encoded texture data)
+     * @return The texture value, or empty string if not set
+     */
+    public String getSkinTextureValue() {
+        return this.entityData.get(SKIN_TEXTURE_VALUE);
+    }
+
+    /**
+     * Set the skin texture value (Base64 encoded texture data)
+     * Synchronized across client and server
+     * @param value The texture value
+     */
+    public void setSkinTextureValue(String value) {
+        this.entityData.set(SKIN_TEXTURE_VALUE, value != null ? value : "");
+    }
+
+    /**
+     * Get the skin texture signature
+     * @return The texture signature, or empty string if not set
+     */
+    public String getSkinTextureSignature() {
+        return this.entityData.get(SKIN_TEXTURE_SIGNATURE);
+    }
+
+    /**
+     * Set the skin texture signature
+     * Synchronized across client and server
+     * @param signature The texture signature
+     */
+    public void setSkinTextureSignature(String signature) {
+        this.entityData.set(SKIN_TEXTURE_SIGNATURE, signature != null ? signature : "");
+    }
+
+    /**
      * Check if the bot can place blocks
      * @return true if can place blocks
      */
@@ -583,6 +684,10 @@ public class BotEntity extends PathfinderMob {
             tag.putUUID("PlayerUUID", playerUUID);
         }
 
+        // Save skin textures (from synced data)
+        tag.putString("SkinTextureValue", getSkinTextureValue());
+        tag.putString("SkinTextureSignature", getSkinTextureSignature());
+
         // Save building toggle (from synced data)
         tag.putBoolean("CanPlaceBlocks", canPlaceBlocks());
 
@@ -643,6 +748,14 @@ public class BotEntity extends PathfinderMob {
             setPlayerUUID(tag.getUUID("PlayerUUID"));
         }
 
+        // Load skin textures (into synced data)
+        if (tag.contains("SkinTextureValue")) {
+            setSkinTextureValue(tag.getString("SkinTextureValue"));
+        }
+        if (tag.contains("SkinTextureSignature")) {
+            setSkinTextureSignature(tag.getString("SkinTextureSignature"));
+        }
+
         // Load building toggle (into synced data)
         if (tag.contains("CanPlaceBlocks")) {
             setCanPlaceBlocks(tag.getBoolean("CanPlaceBlocks"));
@@ -698,51 +811,6 @@ public class BotEntity extends PathfinderMob {
     @Override
     public boolean isPersistenceRequired() {
         return true; // Bots ALWAYS persist
-    }
-
-    /**
-     * Custom tick method for bot-specific logic
-     */
-    @Override
-    public void tick() {
-        super.tick();
-
-        // Bot-specific tick logic here
-        // This is called every game tick (20 times per second)
-
-        if (!this.level().isClientSide) {
-            // Server-side only logic
-            updateAIState();
-
-            // Diagnostic: Log follow state every 100 ticks (5 seconds)
-            if (this.tickCount % 100 == 0 && this.isFollowingLeader()) {
-                // CRITICAL: Check if goalSelector has goals and is working
-                int goalCount = this.goalSelector.getAvailableGoals().size();
-                long runningGoalCount = this.goalSelector.getRunningGoals().count();
-
-                com.aibrigade.main.AIBrigadeMod.LOGGER.info(
-                    "[BotEntity][{}] Status check - Following: {}, LeaderID: {}, Static: {}, Alive: {}, GoalCount: {}, RunningGoals: {}",
-                    this.getBotName(),
-                    this.isFollowingLeader(),
-                    this.getLeaderId(),
-                    this.isStatic(),
-                    this.isAlive(),
-                    goalCount,
-                    runningGoalCount
-                );
-
-                // Log each goal's status
-                this.goalSelector.getAvailableGoals().forEach(goal -> {
-                    com.aibrigade.main.AIBrigadeMod.LOGGER.info(
-                        "[BotEntity][{}] Goal: {} (Priority: {}, Running: {})",
-                        this.getBotName(),
-                        goal.getGoal().getClass().getSimpleName(),
-                        goal.getPriority(),
-                        goal.isRunning()
-                    );
-                });
-            }
-        }
     }
 
     /**

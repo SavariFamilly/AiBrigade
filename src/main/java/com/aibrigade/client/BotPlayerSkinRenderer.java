@@ -1,10 +1,10 @@
 package com.aibrigade.client;
 
 import com.aibrigade.bots.BotEntity;
-import com.aibrigade.bots.MojangSkinFetcher;
+import com.aibrigade.bots.BotClientOptimizer;
 import com.aibrigade.main.AIBrigadeMod;
 import com.mojang.authlib.GameProfile;
-import com.mojang.authlib.minecraft.MinecraftSessionService;
+import com.mojang.authlib.properties.Property;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.model.HumanoidModel;
@@ -16,7 +16,6 @@ import net.minecraft.client.renderer.entity.LivingEntityRenderer;
 import net.minecraft.client.renderer.entity.layers.*;
 import net.minecraft.client.resources.DefaultPlayerSkin;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.entity.player.Player;
 
 import java.util.Map;
 import java.util.UUID;
@@ -52,60 +51,58 @@ public class BotPlayerSkinRenderer extends LivingEntityRenderer<BotEntity, Playe
 
     /**
      * Récupère la texture (skin) pour ce bot
-     * Charge automatiquement les skins Mojang depuis les serveurs via le SkinManager
+     * Utilise les textures synchronisées depuis le serveur
+     * OPTIMIZED: Removed excessive logging for better performance with 200+ bots
      */
     @Override
     public ResourceLocation getTextureLocation(BotEntity bot) {
         UUID playerUUID = bot.getPlayerUUID();
         String botName = bot.getBotName();
+        String textureValue = bot.getSkinTextureValue();
+        String textureSignature = bot.getSkinTextureSignature();
 
-        AIBrigadeMod.LOGGER.info("[BotSkinRenderer] getTextureLocation called for bot: {}, UUID: {}", botName, playerUUID);
-
+        // Si pas d'UUID, retourner le skin par défaut
         if (playerUUID == null) {
-            AIBrigadeMod.LOGGER.info("[BotSkinRenderer] UUID is NULL, returning default Steve skin");
             return DEFAULT_STEVE_SKIN;
         }
 
         try {
-            // Make botName final for lambda usage
             final String finalBotName = (botName == null || botName.isEmpty()) ? "Bot" : botName;
-
-            GameProfile profile = new GameProfile(playerUUID, finalBotName);
             Minecraft minecraft = Minecraft.getInstance();
 
-            AIBrigadeMod.LOGGER.info("[BotSkinRenderer] Created GameProfile: {} ({})", profile.getName(), profile.getId());
+            // Créer le GameProfile avec les textures
+            GameProfile profile = new GameProfile(playerUUID, finalBotName);
 
-            // Utiliser registerSkins pour charger le profil complet depuis Mojang
-            // C'est la méthode que Minecraft utilise pour les vrais joueurs
-            if (!SKIN_LOAD_INITIATED.containsKey(playerUUID)) {
-                SKIN_LOAD_INITIATED.put(playerUUID, true);
+            // Si on a les textures synchronisées du serveur, les ajouter au profil
+            if (textureValue != null && !textureValue.isEmpty()) {
+                // Ajouter la property "textures" avec value et signature
+                Property textureProperty;
+                if (textureSignature != null && !textureSignature.isEmpty()) {
+                    textureProperty = new Property("textures", textureValue, textureSignature);
+                } else {
+                    textureProperty = new Property("textures", textureValue);
+                }
+                profile.getProperties().put("textures", textureProperty);
 
-                AIBrigadeMod.LOGGER.info("[BotSkinRenderer] Initiating skin download for {} via registerSkins()", finalBotName);
-
-                // registerSkins télécharge automatiquement les textures depuis Mojang
-                minecraft.getSkinManager().registerSkins(profile, (type, location, profileTexture) -> {
-                    AIBrigadeMod.LOGGER.info("[BotSkinRenderer] CALLBACK: Skin loaded for {} - Type: {}, Location: {}",
-                        finalBotName, type, location);
-                    AIBrigadeMod.LOGGER.info("[BotSkinRenderer] ProfileTexture URL: {}", profileTexture.getUrl());
-
-                    // Force entity to refresh visually after skin loads
-                    // This ensures the renderer is called again with the new skin
-                    if (minecraft.level != null && bot.isAlive()) {
-                        AIBrigadeMod.LOGGER.info("[BotSkinRenderer] Refreshing entity dimensions to trigger re-render");
-                        bot.refreshDimensions();
-                    }
-                }, true);
-            } else {
-                AIBrigadeMod.LOGGER.info("[BotSkinRenderer] Skin already initiated for {}", finalBotName);
+                // Enregistrer le profil avec le SkinManager pour charger la texture (une seule fois)
+                if (!SKIN_LOAD_INITIATED.containsKey(playerUUID)) {
+                    SKIN_LOAD_INITIATED.put(playerUUID, true);
+                    minecraft.getSkinManager().registerSkins(profile, (type, location, profileTexture) -> {
+                        // Skin loaded callback - force re-render
+                        if (minecraft.level != null && bot.isAlive()) {
+                            bot.refreshDimensions();
+                        }
+                    }, true);
+                }
             }
 
-            // Retourner la texture (sera Steve jusqu'à ce que le téléchargement soit terminé)
-            ResourceLocation skinLoc = minecraft.getSkinManager().getInsecureSkinLocation(profile);
-            AIBrigadeMod.LOGGER.info("[BotSkinRenderer] Returning skin location: {} for {}", skinLoc, finalBotName);
-            return skinLoc;
+            // Retourner la texture depuis le skin manager
+            return minecraft.getSkinManager().getInsecureSkinLocation(profile);
 
         } catch (Exception e) {
-            AIBrigadeMod.LOGGER.error("[BotSkinRenderer] ERROR for {}: {}", (botName != null ? botName : "Unknown"), e.getMessage(), e);
+            // Log errors only (not every texture lookup)
+            AIBrigadeMod.LOGGER.error("[BotSkinRenderer] Error loading skin for {}: {}",
+                (botName != null ? botName : "Unknown"), e.getMessage());
             return DEFAULT_STEVE_SKIN;
         }
     }
@@ -114,11 +111,28 @@ public class BotPlayerSkinRenderer extends LivingEntityRenderer<BotEntity, Playe
     public void render(BotEntity bot, float entityYaw, float partialTicks, PoseStack poseStack,
                       MultiBufferSource bufferSource, int packedLight) {
 
-        // Appliquer les transformations de base
+        // CLIENT OPTIMIZATION: Minimal distance check only
+        // All game logic is handled server-side
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.player != null) {
+            double distanceSqr = minecraft.player.distanceToSqr(bot);
+
+            // Simple render culling - don't render far bots
+            if (!BotClientOptimizer.shouldRender(bot, distanceSqr)) {
+                return;
+            }
+
+            // Simple LOD - skip very distant bots
+            int lod = BotClientOptimizer.getSimpleLOD(distanceSqr);
+            if (lod >= 1) {
+                // Distant bots: skip rendering to save client FPS
+                return;
+            }
+        }
+
+        // Render the bot - all AI/pathfinding is server-side
         poseStack.pushPose();
-
         super.render(bot, entityYaw, partialTicks, poseStack, bufferSource, packedLight);
-
         poseStack.popPose();
     }
 
@@ -126,5 +140,11 @@ public class BotPlayerSkinRenderer extends LivingEntityRenderer<BotEntity, Playe
     protected void scale(BotEntity bot, PoseStack poseStack, float partialTicks) {
         // Taille normale (comme un joueur)
         poseStack.scale(0.9375F, 0.9375F, 0.9375F);
+    }
+
+    @Override
+    public boolean shouldRender(BotEntity entity, net.minecraft.client.renderer.culling.Frustum frustum, double x, double y, double z) {
+        // PERFORMANCE: Frustum culling - don't render bots outside camera view
+        return super.shouldRender(entity, frustum, x, y, z);
     }
 }

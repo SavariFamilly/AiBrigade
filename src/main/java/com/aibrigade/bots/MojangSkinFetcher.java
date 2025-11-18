@@ -42,6 +42,10 @@ public class MojangSkinFetcher {
     // Tracking used player UUIDs to ensure uniqueness
     private static final Set<UUID> USED_PLAYER_UUIDS = ConcurrentHashMap.newKeySet();
 
+    // Cache de joueurs vérifiés avec skins (pour réutilisation rapide)
+    private static final List<String> VERIFIED_PLAYERS_WITH_SKINS = new ArrayList<>();
+    private static int verifiedPlayerIndex = 0;
+
     // Cache nom -> UUID pour éviter les requêtes répétées
     private static final Map<String, UUID> NAME_TO_UUID_CACHE = new ConcurrentHashMap<>();
 
@@ -179,12 +183,10 @@ public class MojangSkinFetcher {
                     // Le joueur n'existe pas
                     NON_EXISTENT_USERNAMES.add(username.toLowerCase());
                     failedAttempts++;
-                    com.aibrigade.main.AIBrigadeMod.LOGGER.debug("Player {} does not exist", username);
                     return null;
                 }
 
                 if (responseCode != 200) {
-                    com.aibrigade.main.AIBrigadeMod.LOGGER.warn("Player {} check failed (HTTP {})", username, responseCode);
                     failedAttempts++;
                     return null;
                 }
@@ -214,8 +216,6 @@ public class MojangSkinFetcher {
                 NAME_TO_UUID_CACHE.put(username.toLowerCase(), uuid);
                 VERIFIED_USERNAMES.add(username);
                 successfulFinds++;
-
-                com.aibrigade.main.AIBrigadeMod.LOGGER.info("✓ Verified player: {} (UUID: {})", username, uuid);
                 return uuid;
 
             } catch (Exception e) {
@@ -245,11 +245,10 @@ public class MojangSkinFetcher {
                 try {
                     UUID uuid = getUUIDFromUsername(randomUsername).get();
                     if (uuid != null) {
-                        com.aibrigade.main.AIBrigadeMod.LOGGER.info("Found existing player: {} after {} attempts", randomUsername, attempts + 1);
                         return randomUsername;
                     }
                 } catch (Exception e) {
-                    com.aibrigade.main.AIBrigadeMod.LOGGER.debug("Attempt {}: {} does not exist", attempts + 1, randomUsername);
+                    // Player doesn't exist, continue searching
                 }
 
                 attempts++;
@@ -355,86 +354,132 @@ public class MojangSkinFetcher {
 
     /**
      * Applique un GameProfile à un BotEntity
+     * Extrait les textures et les synchronise au client
      */
     public static void applyProfileToBot(BotEntity bot, GameProfile profile) {
+        com.aibrigade.main.AIBrigadeMod.LOGGER.info("[ApplyProfile] Starting for {} (UUID: {})",
+            profile.getName(), profile.getId());
+
         // Stocker l'UUID du profil
         bot.setPlayerUUID(profile.getId());
 
         // Stocker le nom
         bot.setBotName(profile.getName());
 
-        // Les textures sont dans le GameProfile, elles seront automatiquement
-        // utilisées par le renderer si on utilise PlayerRenderer ou similaire
-        com.aibrigade.main.AIBrigadeMod.LOGGER.debug("Profile applied: {} ({})", profile.getName(), profile.getId());
+        // Debug: Afficher toutes les properties du profil
+        com.aibrigade.main.AIBrigadeMod.LOGGER.info("[ApplyProfile] Profile properties count: {}",
+            profile.getProperties().size());
+        profile.getProperties().keys().forEach(key -> {
+            com.aibrigade.main.AIBrigadeMod.LOGGER.info("[ApplyProfile] Property key: {}", key);
+        });
+
+        // Extraire les textures du profil Mojang
+        if (profile.getProperties().containsKey("textures")) {
+            Property textureProperty = profile.getProperties().get("textures").iterator().next();
+            String value = textureProperty.getValue();
+            String signature = textureProperty.getSignature();
+
+            com.aibrigade.main.AIBrigadeMod.LOGGER.info("[ApplyProfile] Texture value length: {}",
+                value != null ? value.length() : 0);
+            com.aibrigade.main.AIBrigadeMod.LOGGER.info("[ApplyProfile] Texture signature length: {}",
+                signature != null ? signature.length() : 0);
+
+            if (value != null && value.length() > 50) {
+                com.aibrigade.main.AIBrigadeMod.LOGGER.info("[ApplyProfile] Texture value preview: {}...",
+                    value.substring(0, 50));
+            }
+
+            // Appliquer les textures au bot (synchronisé au client)
+            bot.setSkinTextureValue(value);
+            bot.setSkinTextureSignature(signature);
+
+            com.aibrigade.main.AIBrigadeMod.LOGGER.info("✓ Skin textures applied to bot {} (UUID: {})",
+                profile.getName(), profile.getId());
+        } else {
+            com.aibrigade.main.AIBrigadeMod.LOGGER.warn("⚠ Profile {} has no textures property!", profile.getName());
+        }
     }
 
     /**
      * Récupère et applique un skin aléatoire à un bot
-     * Génère des pseudos aléatoires et trouve un qui existe vraiment
+     * Stratégie intelligente avec cache de joueurs vérifiés
      */
     public static void applyRandomFamousSkin(BotEntity bot) {
-        com.aibrigade.main.AIBrigadeMod.LOGGER.info("Searching for random existing player for bot...");
+        // Si on a des joueurs en cache, les utiliser en priorité
+        if (!VERIFIED_PLAYERS_WITH_SKINS.isEmpty()) {
+            String username = VERIFIED_PLAYERS_WITH_SKINS.get(verifiedPlayerIndex % VERIFIED_PLAYERS_WITH_SKINS.size());
+            verifiedPlayerIndex++;
 
-        // Appliquer un nom temporaire
-        bot.setBotName("Searching_Player");
+            com.aibrigade.main.AIBrigadeMod.LOGGER.info("Using cached player: {}", username);
+            applyPlayerSkin(bot, username);
+            return;
+        }
 
-        // Chercher un joueur existant (max 20 tentatives)
-        findRandomExistingPlayer(20).thenAccept(username -> {
+        // Sinon, chercher un nouveau joueur existant
+        com.aibrigade.main.AIBrigadeMod.LOGGER.info("Searching for random player with skin...");
+        bot.setBotName("Searching...");
+
+        // Chercher un joueur existant (max 50 tentatives pour augmenter les chances)
+        findRandomExistingPlayer(50).thenAccept(username -> {
             if (username == null) {
                 // Fallback : utiliser un nom généré
-                com.aibrigade.main.AIBrigadeMod.LOGGER.warn("Could not find existing player, using fallback");
+                com.aibrigade.main.AIBrigadeMod.LOGGER.warn("Could not find player after 50 attempts, using fallback");
                 UUID fallbackUUID = UUID.randomUUID();
                 bot.setPlayerUUID(fallbackUUID);
                 bot.setBotName("Bot_" + fallbackUUID.toString().substring(0, 8));
 
-                // Force client sync for fallback UUID
                 if (!bot.level().isClientSide && bot.isAlive()) {
                     bot.refreshDimensions();
                 }
                 return;
             }
 
-            // Récupérer l'UUID du joueur trouvé
-            getUUIDFromUsername(username).thenAccept(uuid -> {
-                if (uuid == null) {
-                    // Ne devrait pas arriver car on a déjà vérifié
-                    com.aibrigade.main.AIBrigadeMod.LOGGER.error("UUID became null for {}", username);
-                    UUID fallbackUUID = UUID.randomUUID();
-                    bot.setPlayerUUID(fallbackUUID);
-                    bot.setBotName("Bot_" + fallbackUUID.toString().substring(0, 8));
+            // Joueur trouvé ! L'ajouter au cache
+            if (!VERIFIED_PLAYERS_WITH_SKINS.contains(username)) {
+                VERIFIED_PLAYERS_WITH_SKINS.add(username);
+                com.aibrigade.main.AIBrigadeMod.LOGGER.info("✓ Added {} to verified players cache (total: {})",
+                    username, VERIFIED_PLAYERS_WITH_SKINS.size());
+            }
 
-                    // Force client sync for fallback UUID
+            applyPlayerSkin(bot, username);
+        });
+    }
+
+    /**
+     * Applique le skin d'un joueur spécifique à un bot
+     */
+    public static void applyPlayerSkin(BotEntity bot, String username) {
+        com.aibrigade.main.AIBrigadeMod.LOGGER.info("Applying player skin: {}", username);
+        bot.setBotName(username);
+
+        // Récupérer l'UUID du joueur
+        getUUIDFromUsername(username).thenAccept(uuid -> {
+            if (uuid == null) {
+                com.aibrigade.main.AIBrigadeMod.LOGGER.error("Failed to get UUID for player: {}", username);
+                return;
+            }
+
+            // Appliquer l'UUID et le nom
+            bot.setPlayerUUID(uuid);
+            bot.setBotName(username);
+
+            com.aibrigade.main.AIBrigadeMod.LOGGER.info("Fetching profile for {} (UUID: {})", username, uuid);
+
+            // Fetch le profil complet avec les textures depuis Mojang
+            fetchProfileAsync(uuid).thenAccept(profile -> {
+                if (profile != null) {
+                    com.aibrigade.main.AIBrigadeMod.LOGGER.info("Profile fetched for {}, applying textures...", username);
+
+                    // Appliquer le profil complet avec textures
+                    applyProfileToBot(bot, profile);
+
+                    // Force entity data sync to all tracking players
                     if (!bot.level().isClientSide && bot.isAlive()) {
                         bot.refreshDimensions();
                     }
-                    return;
+                } else {
+                    com.aibrigade.main.AIBrigadeMod.LOGGER.error("Profile is null for {}", username);
                 }
-
-                // Marquer comme utilisé
-                USED_PLAYER_UUIDS.add(uuid);
-
-                // Appliquer l'UUID et le nom
-                bot.setPlayerUUID(uuid);
-                bot.setBotName(username);
-
-                com.aibrigade.main.AIBrigadeMod.LOGGER.info("✓ Bot configured with verified player: {} ({})", username, uuid);
-
-                // Fetch le profil complet en arrière-plan pour les textures
-                fetchProfileAsync(uuid).thenAccept(profile -> {
-                    if (profile != null) {
-                        com.aibrigade.main.AIBrigadeMod.LOGGER.info("✓ Skin loaded for: {}", profile.getName());
-
-                        // Force client synchronization by re-setting the UUID
-                        // This triggers a client-side cache refresh for the skin
-                        bot.setPlayerUUID(uuid);
-
-                        // Force entity data sync to all tracking players
-                        if (!bot.level().isClientSide && bot.isAlive()) {
-                            // Refresh entity dimensions to trigger a full sync packet
-                            bot.refreshDimensions();
-                        }
-                    }
-                });
             });
         });
     }

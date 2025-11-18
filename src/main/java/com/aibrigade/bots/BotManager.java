@@ -100,6 +100,7 @@ public class BotManager {
         UUID leaderId = findLeaderUUID(level, leaderName);
         if (leaderId != null) {
             bot.setLeaderId(leaderId);
+            bot.setFollowingLeader(true); // CRITICAL: Enable following behavior
         }
 
         // L'équipement est déjà appliqué dans le constructeur via RandomEquipment.equipRandomItem()

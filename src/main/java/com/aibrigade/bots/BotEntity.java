@@ -242,9 +242,9 @@ public class BotEntity extends PathfinderMob {
     public void aiStep() {
         // Only run on server - client just renders
         if (!this.level().isClientSide) {
-            // Performance optimization: disable pathfinding for static and very distant bots
-            if (!BotPerformanceOptimizer.shouldEnablePathfinding(this)) {
-                // Stop navigation to save CPU
+            // Performance optimization: disable pathfinding for static bots only
+            // NOTE: Removed distance check - was too aggressive and prevented bots from moving
+            if (this.isStatic()) {
                 this.getNavigation().stop();
             }
         }

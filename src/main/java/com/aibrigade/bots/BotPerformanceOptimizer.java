@@ -24,7 +24,7 @@ public class BotPerformanceOptimizer {
     // Distance thresholds (in blocks)
     private static final double CLOSE_DISTANCE = 16.0; // Full updates
     private static final double MEDIUM_DISTANCE = 32.0; // Reduced updates
-    private static final double FAR_DISTANCE = 64.0; // Minimal updates
+    private static final double FAR_DISTANCE = 200.0; // Minimal updates (augmenté de 64 à 200)
 
     // Tick intervals for different distances
     private static final int CLOSE_TICK_INTERVAL = 1; // Every tick

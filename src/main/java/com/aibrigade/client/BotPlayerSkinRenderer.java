@@ -1,12 +1,10 @@
 package com.aibrigade.client;
 
 import com.aibrigade.bots.BotEntity;
-import com.aibrigade.bots.BotPerformanceOptimizer;
-import com.aibrigade.bots.MojangSkinFetcher;
+import com.aibrigade.bots.BotClientOptimizer;
 import com.aibrigade.main.AIBrigadeMod;
 import com.mojang.authlib.GameProfile;
 import com.mojang.authlib.properties.Property;
-import com.mojang.authlib.minecraft.MinecraftSessionService;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.model.HumanoidModel;
@@ -18,7 +16,6 @@ import net.minecraft.client.renderer.entity.LivingEntityRenderer;
 import net.minecraft.client.renderer.entity.layers.*;
 import net.minecraft.client.resources.DefaultPlayerSkin;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.entity.player.Player;
 
 import java.util.Map;
 import java.util.UUID;
@@ -114,29 +111,28 @@ public class BotPlayerSkinRenderer extends LivingEntityRenderer<BotEntity, Playe
     public void render(BotEntity bot, float entityYaw, float partialTicks, PoseStack poseStack,
                       MultiBufferSource bufferSource, int packedLight) {
 
-        // PERFORMANCE: Skip rendering if bot is too far (culling)
+        // CLIENT OPTIMIZATION: Minimal distance check only
+        // All game logic is handled server-side
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.player != null) {
             double distanceSqr = minecraft.player.distanceToSqr(bot);
 
-            // Don't render bots beyond 128 blocks (configurable render distance)
-            if (distanceSqr > 128 * 128) {
+            // Simple render culling - don't render far bots
+            if (!BotClientOptimizer.shouldRender(bot, distanceSqr)) {
                 return;
             }
 
-            // LOD: Simplify rendering for distant bots
-            int lodLevel = BotPerformanceOptimizer.getLODLevel(bot);
-            if (lodLevel >= 3) {
-                // Very far bots: minimal rendering (no armor layers, no animations)
-                return; // Could render a simple billboard instead
+            // Simple LOD - skip very distant bots
+            int lod = BotClientOptimizer.getSimpleLOD(distanceSqr);
+            if (lod >= 1) {
+                // Distant bots: skip rendering to save client FPS
+                return;
             }
         }
 
-        // Appliquer les transformations de base
+        // Render the bot - all AI/pathfinding is server-side
         poseStack.pushPose();
-
         super.render(bot, entityYaw, partialTicks, poseStack, bufferSource, packedLight);
-
         poseStack.popPose();
     }
 

@@ -2,6 +2,7 @@ package com.aibrigade.bots;
 
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import java.util.List;
 
 /**
@@ -131,7 +132,7 @@ public class BotPerformanceOptimizer {
             return Double.MAX_VALUE;
         }
 
-        List<Player> players = serverLevel.players();
+        List<ServerPlayer> players = serverLevel.players();
 
         if (players.isEmpty()) {
             return Double.MAX_VALUE;
@@ -139,7 +140,7 @@ public class BotPerformanceOptimizer {
 
         double minDistance = Double.MAX_VALUE;
 
-        for (Player player : players) {
+        for (ServerPlayer player : players) {
             double distance = bot.distanceToSqr(player);
             if (distance < minDistance) {
                 minDistance = distance;

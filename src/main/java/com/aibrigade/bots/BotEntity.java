@@ -221,14 +221,16 @@ public class BotEntity extends PathfinderMob {
         // Always call super.tick() for essential entity updates
         super.tick();
 
-        // Performance optimization: only update AI based on distance from players
-        int tickCount = this.tickCount;
+        // Server-side only logic
+        if (!this.level().isClientSide) {
+            // Performance optimization: only update AI based on distance from players
+            int tickCount = this.tickCount;
 
-        // Check if AI should update this tick (uses distance-based intervals)
-        if (!BotPerformanceOptimizer.shouldUpdateAI(this, tickCount)) {
-            // Skip AI updates for this tick to save performance
-            // The bot will still move, render, and sync, but won't recompute goals
-            return;
+            // Check if AI should update this tick (uses distance-based intervals)
+            if (BotPerformanceOptimizer.shouldUpdateAI(this, tickCount)) {
+                // Update AI state when appropriate
+                updateAIState();
+            }
         }
     }
 
@@ -236,7 +238,7 @@ public class BotEntity extends PathfinderMob {
      * Override aiStep for additional optimizations
      */
     @Override
-    protected void aiStep() {
+    public void aiStep() {
         // Performance optimization: disable pathfinding for static and very distant bots
         if (!BotPerformanceOptimizer.shouldEnablePathfinding(this)) {
             // Stop navigation to save CPU
@@ -805,22 +807,6 @@ public class BotEntity extends PathfinderMob {
     @Override
     public boolean isPersistenceRequired() {
         return true; // Bots ALWAYS persist
-    }
-
-    /**
-     * Custom tick method for bot-specific logic
-     */
-    @Override
-    public void tick() {
-        super.tick();
-
-        // Bot-specific tick logic here
-        // This is called every game tick (20 times per second)
-
-        if (!this.level().isClientSide) {
-            // Server-side only logic
-            updateAIState();
-        }
     }
 
     /**

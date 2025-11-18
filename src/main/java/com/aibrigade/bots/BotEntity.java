@@ -81,12 +81,12 @@ public class BotEntity extends PathfinderMob {
         SynchedEntityData.defineId(BotEntity.class, EntityDataSerializers.BOOLEAN);
     private static final EntityDataAccessor<java.util.Optional<UUID>> PLAYER_UUID =
         SynchedEntityData.defineId(BotEntity.class, EntityDataSerializers.OPTIONAL_UUID);
+    private static final EntityDataAccessor<Boolean> CAN_PLACE_BLOCKS =
+        SynchedEntityData.defineId(BotEntity.class, EntityDataSerializers.BOOLEAN);
     private static final EntityDataAccessor<String> SKIN_TEXTURE_VALUE =
         SynchedEntityData.defineId(BotEntity.class, EntityDataSerializers.STRING);
     private static final EntityDataAccessor<String> SKIN_TEXTURE_SIGNATURE =
         SynchedEntityData.defineId(BotEntity.class, EntityDataSerializers.STRING);
-    private static final EntityDataAccessor<Boolean> CAN_PLACE_BLOCKS =
-        SynchedEntityData.defineId(BotEntity.class, EntityDataSerializers.BOOLEAN);
 
     // Bot properties
     private UUID leaderId; // UUID of the leader (player or bot)
@@ -150,9 +150,9 @@ public class BotEntity extends PathfinderMob {
         this.entityData.define(IS_HOSTILE, false);
         this.entityData.define(IS_FOLLOWING_LEADER, false);
         this.entityData.define(PLAYER_UUID, java.util.Optional.empty());
+        this.entityData.define(CAN_PLACE_BLOCKS, true);
         this.entityData.define(SKIN_TEXTURE_VALUE, "");
         this.entityData.define(SKIN_TEXTURE_SIGNATURE, "");
-        this.entityData.define(CAN_PLACE_BLOCKS, true);
     }
 
     /**

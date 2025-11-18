@@ -25,6 +25,10 @@ import net.minecraft.core.BlockPos;
  * - /aibrigade assignleader <groupName> <leaderName>
  * - /aibrigade hostile <groupName1> <groupName2>
  * - /aibrigade givearmor <target> <full|partial> <materials>
+ * - /aibrigade modify name <botName> <newName>
+ * - /aibrigade modify armor <botName> <slot> <type> <materials>
+ * - /aibrigade modify hand <botName> <item>
+ * - /aibrigade modify offhand <botName> <item>
  * - /aibrigade setbehavior <target> <behavior>
  * - /aibrigade setradius <groupName> <radius>
  * - /aibrigade togglestatic <target>
@@ -88,6 +92,26 @@ public class BotCommandHandler {
                     .then(Commands.argument("type", StringArgumentType.string())
                         .then(Commands.argument("materials", StringArgumentType.string())
                             .executes(BotCommandHandler::giveArmor)))))
+
+            .then(Commands.literal("modify")
+                .then(Commands.literal("name")
+                    .then(Commands.argument("botName", StringArgumentType.string())
+                        .then(Commands.argument("newName", StringArgumentType.string())
+                            .executes(BotCommandHandler::modifyName))))
+                .then(Commands.literal("armor")
+                    .then(Commands.argument("botName", StringArgumentType.string())
+                        .then(Commands.argument("slot", StringArgumentType.string())
+                            .then(Commands.argument("type", StringArgumentType.string())
+                                .then(Commands.argument("materials", StringArgumentType.string())
+                                    .executes(BotCommandHandler::modifyArmor))))))
+                .then(Commands.literal("hand")
+                    .then(Commands.argument("botName", StringArgumentType.string())
+                        .then(Commands.argument("item", StringArgumentType.string())
+                            .executes(BotCommandHandler::modifyHand))))
+                .then(Commands.literal("offhand")
+                    .then(Commands.argument("botName", StringArgumentType.string())
+                        .then(Commands.argument("item", StringArgumentType.string())
+                            .executes(BotCommandHandler::modifyOffhand)))))
 
             .then(Commands.literal("setbehavior")
                 .then(Commands.argument("target", StringArgumentType.string())
@@ -619,6 +643,20 @@ public class BotCommandHandler {
               -> 5/6 bots follow in radius, 1/6 follow actively
             /aibrigade hostile <sourceGroup> <targetGroup>
             /aibrigade givearmor <target> <full|partial> <materials>
+
+            === Modify Commands ===
+            /aibrigade modify name <botName> <newName>
+              -> Changes bot name and syncs skin from new username
+            /aibrigade modify armor <botName> <slot> <type> <materials>
+              -> Slots: full, head, chest, legs, boots
+              -> Types: random, preset
+              -> Example: /aibrigade modify armor Bot1 full random diamondironleather
+            /aibrigade modify hand <botName> <item>
+              -> Example: /aibrigade modify hand Bot1 diamond_sword
+            /aibrigade modify offhand <botName> <item>
+              -> Example: /aibrigade modify offhand Bot1 shield
+
+            === Other Commands ===
             /aibrigade setbehavior <target> <behavior>
             /aibrigade setradius <groupName> <radius>
             /aibrigade togglestatic <target>
@@ -642,6 +680,119 @@ public class BotCommandHandler {
             false);
 
         return 1;
+    }
+
+    /**
+     * Command: /aibrigade modify name
+     * Changes bot name and syncs skin from new username
+     */
+    private static int modifyName(CommandContext<CommandSourceStack> context) {
+        String botName = StringArgumentType.getString(context, "botName");
+        String newName = StringArgumentType.getString(context, "newName");
+
+        BotManager botManager = AIBrigadeMod.getBotManager();
+        if (botManager == null) {
+            context.getSource().sendFailure(Component.literal("Bot manager not initialized"));
+            return 0;
+        }
+
+        boolean success = BotModifyCommands.modifyBotName(botManager, botName, newName);
+
+        if (success) {
+            context.getSource().sendSuccess(() ->
+                Component.literal("Changed bot '" + botName + "' name to '" + newName + "' and synced skin"),
+                true);
+            return 1;
+        } else {
+            context.getSource().sendFailure(Component.literal("Bot '" + botName + "' not found"));
+            return 0;
+        }
+    }
+
+    /**
+     * Command: /aibrigade modify armor
+     * Modifies bot armor with random or preset materials
+     * Example: /aibrigade modify armor Bot1 full random diamondironleather
+     */
+    private static int modifyArmor(CommandContext<CommandSourceStack> context) {
+        String botName = StringArgumentType.getString(context, "botName");
+        String slot = StringArgumentType.getString(context, "slot");
+        String type = StringArgumentType.getString(context, "type");
+        String materials = StringArgumentType.getString(context, "materials");
+
+        BotManager botManager = AIBrigadeMod.getBotManager();
+        if (botManager == null) {
+            context.getSource().sendFailure(Component.literal("Bot manager not initialized"));
+            return 0;
+        }
+
+        boolean success = BotModifyCommands.modifyBotArmor(botManager, botName, slot, type, materials);
+
+        if (success) {
+            context.getSource().sendSuccess(() ->
+                Component.literal("Equipped " + slot + " armor on bot '" + botName + "' (" + type + ": " + materials + ")"),
+                true);
+            return 1;
+        } else {
+            context.getSource().sendFailure(Component.literal("Failed to modify armor - bot not found or invalid parameters"));
+            return 0;
+        }
+    }
+
+    /**
+     * Command: /aibrigade modify hand
+     * Sets item in bot's main hand
+     * Example: /aibrigade modify hand Bot1 diamond_sword
+     */
+    private static int modifyHand(CommandContext<CommandSourceStack> context) {
+        String botName = StringArgumentType.getString(context, "botName");
+        String item = StringArgumentType.getString(context, "item");
+
+        BotManager botManager = AIBrigadeMod.getBotManager();
+        if (botManager == null) {
+            context.getSource().sendFailure(Component.literal("Bot manager not initialized"));
+            return 0;
+        }
+
+        boolean success = BotModifyCommands.modifyBotHand(botManager, botName, item);
+
+        if (success) {
+            context.getSource().sendSuccess(() ->
+                Component.literal("Set " + item + " in hand for bot '" + botName + "'"),
+                true);
+            return 1;
+        } else {
+            context.getSource().sendFailure(Component.literal("Failed to set hand item - bot or item not found"));
+            return 0;
+        }
+    }
+
+    /**
+     * Command: /aibrigade modify offhand
+     * Sets item in bot's offhand
+     * Example: /aibrigade modify offhand Bot1 shield
+     */
+    private static int modifyOffhand(CommandContext<CommandSourceStack> context) {
+        String botName = StringArgumentType.getString(context, "botName");
+        String item = StringArgumentType.getString(context, "item");
+
+        BotManager botManager = AIBrigadeMod.getBotManager();
+        if (botManager == null) {
+            context.getSource().sendFailure(Component.literal("Bot manager not initialized"));
+            return 0;
+        }
+
+        boolean success = BotModifyCommands.modifyBotOffhand(botManager, botName, item);
+
+        if (success) {
+            context.getSource().sendSuccess(() ->
+                Component.literal("Set " + item + " in offhand for bot '" + botName + "'"),
+                true);
+            return 1;
+        } else {
+            context.getSource().sendFailure(Component.literal("Failed to set offhand item - bot or item not found"));
+            return 0;
+        }
     }
 
 }

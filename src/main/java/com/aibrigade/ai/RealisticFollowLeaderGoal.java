@@ -86,7 +86,7 @@ public class RealisticFollowLeaderGoal extends Goal {
         }
 
         // Initialiser les comportements aléatoires
-        this.currentSpeedMultiplier = 0.9 + random.nextDouble() * 0.2; // 0.9-1.1x
+        this.currentSpeedMultiplier = 0.95 + random.nextDouble() * 0.15; // 0.95-1.1x
         this.isActivelyChasing = random.nextFloat() < chaseChance;
     }
 
@@ -216,8 +216,8 @@ public class RealisticFollowLeaderGoal extends Goal {
         // === 3. Variation de vitesse ===
         speedChangeTimer--;
         if (speedChangeTimer <= 0) {
-            // Changer légèrement la vitesse (0.85x - 1.15x)
-            currentSpeedMultiplier = 0.85 + random.nextDouble() * 0.3;
+            // Changer légèrement la vitesse (0.95x - 1.15x)
+            currentSpeedMultiplier = 0.95 + random.nextDouble() * 0.2;
             speedChangeTimer = BotAIConstants.SPEED_CHANGE_INTERVAL_TICKS;
         }
 

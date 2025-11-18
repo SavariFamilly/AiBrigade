@@ -164,7 +164,7 @@ public class BotEntity extends PathfinderMob {
     public static AttributeSupplier.Builder createAttributes() {
         return PathfinderMob.createMobAttributes()
             .add(Attributes.MAX_HEALTH, 20.0D)
-            .add(Attributes.MOVEMENT_SPEED, 0.1D) // Vitesse identique au joueur
+            .add(Attributes.MOVEMENT_SPEED, 0.13D) // Vitesse augmentée (+30%) pour suivre le joueur
             .add(Attributes.ATTACK_DAMAGE, 3.0D)
             .add(Attributes.ARMOR, 2.0D)
             .add(Attributes.FOLLOW_RANGE, 32.0D)
@@ -186,7 +186,7 @@ public class BotEntity extends PathfinderMob {
         this.goalSelector.addGoal(1, new ActiveGazeBehavior(this));
 
         // Priorité 2: Realistic follow leader (avec probabilités et variations)
-        RealisticFollowLeaderGoal followGoal = new RealisticFollowLeaderGoal(this, 1.1D, 3.0F, 10.0F);
+        RealisticFollowLeaderGoal followGoal = new RealisticFollowLeaderGoal(this, 1.3D, 3.0F, 10.0F);
         this.goalSelector.addGoal(2, followGoal);
 
         // Priorité 3: Place blocks to reach target (avec toggle canPlaceBlocks)

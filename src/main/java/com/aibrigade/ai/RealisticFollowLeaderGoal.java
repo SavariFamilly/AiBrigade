@@ -68,6 +68,9 @@ public class RealisticFollowLeaderGoal extends Goal {
     private double curveOffset;
     private int curveUpdateTimer;
 
+    // Sprint-jump (comme les joueurs)
+    private int jumpCooldown;
+
     public RealisticFollowLeaderGoal(BotEntity bot, double speed, float minDist, float maxDist) {
         this.bot = bot;
         this.speedModifier = speed;
@@ -86,7 +89,7 @@ public class RealisticFollowLeaderGoal extends Goal {
         }
 
         // Initialiser les comportements aléatoires
-        this.currentSpeedMultiplier = 0.95 + random.nextDouble() * 0.15; // 0.95-1.1x
+        this.currentSpeedMultiplier = 1.0; // Pas de variation, le sprint gère la vitesse
         this.isActivelyChasing = random.nextFloat() < chaseChance;
     }
 
@@ -173,6 +176,9 @@ public class RealisticFollowLeaderGoal extends Goal {
 
         // Décider si ce bot va activement chase
         updateChaseDecision();
+
+        // Activer le sprint pour suivre le leader (comme un joueur)
+        bot.setSprinting(true);
     }
 
     @Override
@@ -213,15 +219,7 @@ public class RealisticFollowLeaderGoal extends Goal {
             return;
         }
 
-        // === 3. Variation de vitesse ===
-        speedChangeTimer--;
-        if (speedChangeTimer <= 0) {
-            // Changer légèrement la vitesse (0.95x - 1.15x)
-            currentSpeedMultiplier = 0.95 + random.nextDouble() * 0.2;
-            speedChangeTimer = BotAIConstants.SPEED_CHANGE_INTERVAL_TICKS;
-        }
-
-        // === 4. Trajectoire courbe ===
+        // === 3. Trajectoire courbe ===
         curveUpdateTimer--;
         if (curveUpdateTimer <= 0) {
             curveOffset = (random.nextDouble() - 0.5) * 2.0; // -1.0 à +1.0
@@ -243,27 +241,31 @@ public class RealisticFollowLeaderGoal extends Goal {
         Vec3 curvedTarget = applyCurveToPath(targetPosition);
 
         // === 8. Déplacement ===
-        double finalSpeed = speedModifier * currentSpeedMultiplier;
+        // Le bot utilise le sprint (setSprinting) donc on ne multiplie pas la vitesse
+        // Juste un petit boost si vraiment trop loin pour rattraper le leader
+        double finalSpeed = speedModifier;
 
-        // Boost de vitesse selon le type et la distance
-        if (behaviorType == FollowBehaviorType.ACTIVE_FOLLOW) {
-            // Active followers sont plus rapides pour rester près
-            if (distance > minFollowDistance * 3) {
-                finalSpeed *= 1.4;
-            } else if (distance > minFollowDistance * 2) {
-                finalSpeed *= 1.2;
-            }
-        } else {
-            // Radius-based boost si trop loin du radius
-            if (distance > maxFollowDistance * 2) {
-                finalSpeed *= 1.3;
-            } else if (distance > maxFollowDistance * 1.5) {
-                finalSpeed *= 1.15;
-            }
+        // Téléportation si vraiment trop loin (>50 blocs)
+        if (distance > BotAIConstants.TELEPORT_DISTANCE) {
+            bot.teleportTo(leader.getX(), leader.getY(), leader.getZ());
+            return;
         }
 
         // Naviguer vers la position
         BotMovementHelper.moveToPosition(bot, curvedTarget, finalSpeed);
+
+        // === 8. Sprint-jump (comme les joueurs en PvP) ===
+        // Sauter pendant le sprint pour aller plus vite
+        if (bot.isSprinting() && bot.onGround()) {
+            jumpCooldown--;
+            if (jumpCooldown <= 0) {
+                // Vérifier que le bot se déplace
+                if (bot.getDeltaMovement().horizontalDistanceSqr() > 0.001) {
+                    bot.jumpFromGround(); // Sauter
+                    jumpCooldown = 8 + random.nextInt(5); // Sauter toutes les 8-12 ticks (~0.4-0.6s)
+                }
+            }
+        }
 
         // === 9. Regarder le leader ===
         BotLookHelper.lookAtEntity(bot, leader, BotAIConstants.LOOK_YAW_SPEED_FAST, BotAIConstants.LOOK_PITCH_SPEED_FAST);
@@ -273,6 +275,9 @@ public class RealisticFollowLeaderGoal extends Goal {
     public void stop() {
         BotMovementHelper.stopMovement(bot);
         targetPosition = null;
+
+        // Désactiver le sprint quand on arrête de suivre
+        bot.setSprinting(false);
     }
 
     /**

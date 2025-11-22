@@ -4,6 +4,7 @@ import com.aibrigade.ai.RealisticFollowLeaderGoal;
 import com.aibrigade.ai.ActiveGazeBehavior;
 import com.aibrigade.ai.TeamAwareAttackGoal;
 import com.aibrigade.ai.PlaceBlockToReachTargetGoal;
+import com.aibrigade.ai.SprintingMeleeAttackGoal;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
@@ -164,7 +165,7 @@ public class BotEntity extends PathfinderMob {
     public static AttributeSupplier.Builder createAttributes() {
         return PathfinderMob.createMobAttributes()
             .add(Attributes.MAX_HEALTH, 20.0D)
-            .add(Attributes.MOVEMENT_SPEED, 0.13D) // Vitesse augmentée (+30%) pour suivre le joueur
+            .add(Attributes.MOVEMENT_SPEED, 0.1D) // Vitesse identique au joueur (sprint géré par setSprinting)
             .add(Attributes.ATTACK_DAMAGE, 3.0D)
             .add(Attributes.ARMOR, 2.0D)
             .add(Attributes.FOLLOW_RANGE, 32.0D)
@@ -186,17 +187,17 @@ public class BotEntity extends PathfinderMob {
         this.goalSelector.addGoal(1, new ActiveGazeBehavior(this));
 
         // Priorité 2: Realistic follow leader (avec probabilités et variations)
-        RealisticFollowLeaderGoal followGoal = new RealisticFollowLeaderGoal(this, 1.3D, 3.0F, 10.0F);
+        RealisticFollowLeaderGoal followGoal = new RealisticFollowLeaderGoal(this, 1.0D, 3.0F, 10.0F);
         this.goalSelector.addGoal(2, followGoal);
 
         // Priorité 3: Place blocks to reach target (avec toggle canPlaceBlocks)
         this.goalSelector.addGoal(3, new PlaceBlockToReachTargetGoal(this));
 
-        // Priorité 4: Melee attack
-        this.goalSelector.addGoal(4, new net.minecraft.world.entity.ai.goal.MeleeAttackGoal(this, 1.2D, false));
+        // Priorité 4: Melee attack avec sprint et sauts (comme un joueur)
+        this.goalSelector.addGoal(4, new SprintingMeleeAttackGoal(this, 1.0D, false));
 
         // Priorité 5: Wander when idle
-        this.goalSelector.addGoal(5, new net.minecraft.world.entity.ai.goal.WaterAvoidingRandomStrollGoal(this, 1.0D));
+        this.goalSelector.addGoal(5, new net.minecraft.world.entity.ai.goal.WaterAvoidingRandomStrollGoal(this, 0.8D));
 
         // Priorité 6: Look at player (secondaire car ActiveGazeBehavior gère déjà)
         this.goalSelector.addGoal(6, new net.minecraft.world.entity.ai.goal.LookAtPlayerGoal(this, Player.class, 8.0F));

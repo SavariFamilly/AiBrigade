@@ -99,10 +99,10 @@ public class BotEntity extends PathfinderMob {
     // Behavior configuration
     private BotBehaviorConfig behaviorConfig;
 
-    // Equipment and inventory
-    private ItemStack[] armorSlots = new ItemStack[4]; // Head, chest, legs, boots
-    private ItemStack mainHandItem = ItemStack.EMPTY;
-    private ItemStack offHandItem = ItemStack.EMPTY;
+    // MAJOR FIX: Removed redundant equipment fields (#18, #19)
+    // Equipment is already managed by Minecraft's native LivingEntity.setItemSlot()
+    // Double storage caused memory waste (1200 ItemStacks with 300 bots) and potential inconsistencies
+    // Now using getItemBySlot() and setItemSlot() directly
 
     /**
      * Constructor for BotEntity
@@ -119,10 +119,8 @@ public class BotEntity extends PathfinderMob {
         // Initialize behavior config with default soldier preset
         this.behaviorConfig = BotBehaviorConfig.createSoldier();
 
-        // Initialize armor slots
-        for (int i = 0; i < armorSlots.length; i++) {
-            armorSlots[i] = ItemStack.EMPTY;
-        }
+        // MAJOR FIX: Removed armor slots initialization (redundant fields removed)
+        // Equipment is managed directly by Minecraft's LivingEntity system
 
         // Apply random Mojang skin and equipment
         if (!level.isClientSide) {
@@ -593,13 +591,16 @@ public class BotEntity extends PathfinderMob {
     /**
      * Equip armor piece in specific slot
      *
+     * MAJOR FIX: Removed double storage - now uses only Minecraft native storage
+     * Old: Stored in armorSlots[] AND setItemSlot() → memory waste + inconsistencies
+     * New: Stores directly in setItemSlot() only
+     *
      * @param slot The armor slot (0=helmet, 1=chestplate, 2=leggings, 3=boots)
      * @param item The armor item
      */
     public void setArmorSlot(int slot, ItemStack item) {
         if (slot >= 0 && slot < 4) {
-            armorSlots[slot] = item;
-            // Update visual equipment
+            // MAJOR FIX: Direct storage in Minecraft's equipment system only
             // Minecraft armor slots: FEET=0, LEGS=1, CHEST=2, HEAD=3
             // Our slots: 0=helmet, 1=chestplate, 2=leggings, 3=boots
             EquipmentSlot equipmentSlot;
@@ -617,12 +618,25 @@ public class BotEntity extends PathfinderMob {
     /**
      * Get armor in specific slot
      *
-     * @param slot The armor slot
+     * MAJOR FIX: Reads directly from Minecraft native storage
+     * Old: Read from armorSlots[] → could be out of sync with actual equipment
+     * New: Reads from getItemBySlot() → always correct
+     *
+     * @param slot The armor slot (0=helmet, 1=chestplate, 2=leggings, 3=boots)
      * @return The armor item
      */
     public ItemStack getArmorSlot(int slot) {
         if (slot >= 0 && slot < 4) {
-            return armorSlots[slot];
+            // MAJOR FIX: Read directly from Minecraft's equipment system
+            EquipmentSlot equipmentSlot;
+            switch (slot) {
+                case 0: equipmentSlot = EquipmentSlot.HEAD; break;
+                case 1: equipmentSlot = EquipmentSlot.CHEST; break;
+                case 2: equipmentSlot = EquipmentSlot.LEGS; break;
+                case 3: equipmentSlot = EquipmentSlot.FEET; break;
+                default: return ItemStack.EMPTY;
+            }
+            return this.getItemBySlot(equipmentSlot);
         }
         return ItemStack.EMPTY;
     }
@@ -632,7 +646,7 @@ public class BotEntity extends PathfinderMob {
      * @param item The item to hold
      */
     public void setMainHandItem(ItemStack item) {
-        this.mainHandItem = item;
+        // MAJOR FIX: Direct storage in Minecraft's equipment system only
         this.setItemSlot(EquipmentSlot.MAINHAND, item);
     }
 
@@ -641,7 +655,7 @@ public class BotEntity extends PathfinderMob {
      * @param item The item to hold
      */
     public void setOffHandItem(ItemStack item) {
-        this.offHandItem = item;
+        // MAJOR FIX: Direct storage in Minecraft's equipment system only
         this.setItemSlot(EquipmentSlot.OFFHAND, item);
     }
 

@@ -14,6 +14,8 @@ import java.net.URL;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * MojangSkinFetcher - Récupère automatiquement les skins de joueurs Minecraft aléatoires
@@ -42,9 +44,12 @@ public class MojangSkinFetcher {
     // Tracking used player UUIDs to ensure uniqueness
     private static final Set<UUID> USED_PLAYER_UUIDS = ConcurrentHashMap.newKeySet();
 
+    // MAJOR FIX: Thread-safe collections for async access
     // Cache de joueurs vérifiés avec skins (pour réutilisation rapide)
-    private static final List<String> VERIFIED_PLAYERS_WITH_SKINS = new ArrayList<>();
-    private static int verifiedPlayerIndex = 0;
+    // CopyOnWriteArrayList = thread-safe, optimal for read-heavy workloads
+    private static final List<String> VERIFIED_PLAYERS_WITH_SKINS = new CopyOnWriteArrayList<>();
+    // AtomicInteger for thread-safe counter (accessed from multiple async threads)
+    private static final AtomicInteger verifiedPlayerIndex = new AtomicInteger(0);
 
     // Cache nom -> UUID pour éviter les requêtes répétées
     private static final Map<String, UUID> NAME_TO_UUID_CACHE = new ConcurrentHashMap<>();
@@ -55,10 +60,12 @@ public class MojangSkinFetcher {
     // Cache des pseudos qui n'existent PAS (pour éviter de les retester)
     private static final Set<String> NON_EXISTENT_USERNAMES = ConcurrentHashMap.newKeySet();
 
-    // Statistiques
-    private static int totalAttempts = 0;
-    private static int successfulFinds = 0;
-    private static int failedAttempts = 0;
+    // MAJOR FIX: Thread-safe statistics counters (accessed from async threads)
+    // Old: int counters → race conditions (lost increments)
+    // New: AtomicInteger → thread-safe atomic increments
+    private static final AtomicInteger totalAttempts = new AtomicInteger(0);
+    private static final AtomicInteger successfulFinds = new AtomicInteger(0);
+    private static final AtomicInteger failedAttempts = new AtomicInteger(0);
 
     /**
      * Récupère un GameProfile complet avec skin depuis l'UUID
@@ -171,17 +178,17 @@ public class MojangSkinFetcher {
      */
     public static CompletableFuture<UUID> getUUIDFromUsername(String username) {
         return CompletableFuture.supplyAsync(() -> {
-            totalAttempts++;
+            totalAttempts.incrementAndGet();
 
             // Vérifier le cache positif
             if (NAME_TO_UUID_CACHE.containsKey(username.toLowerCase())) {
-                successfulFinds++;
+                successfulFinds.incrementAndGet();
                 return NAME_TO_UUID_CACHE.get(username.toLowerCase());
             }
 
             // Vérifier le cache négatif
             if (NON_EXISTENT_USERNAMES.contains(username.toLowerCase())) {
-                failedAttempts++;
+                failedAttempts.incrementAndGet();
                 return null;
             }
 
@@ -202,12 +209,12 @@ public class MojangSkinFetcher {
                 if (responseCode == 204 || responseCode == 404) {
                     // Le joueur n'existe pas
                     NON_EXISTENT_USERNAMES.add(username.toLowerCase());
-                    failedAttempts++;
+                    failedAttempts.incrementAndGet();
                     return null;
                 }
 
                 if (responseCode != 200) {
-                    failedAttempts++;
+                    failedAttempts.incrementAndGet();
                     return null;
                 }
 
@@ -234,12 +241,12 @@ public class MojangSkinFetcher {
                 // Mettre en cache
                 NAME_TO_UUID_CACHE.put(username.toLowerCase(), uuid);
                 VERIFIED_USERNAMES.add(username);
-                successfulFinds++;
+                successfulFinds.incrementAndGet();
                 return uuid;
 
             } catch (Exception e) {
                 com.aibrigade.main.AIBrigadeMod.LOGGER.error("Error checking username {}: {}", username, e.getMessage());
-                failedAttempts++;
+                failedAttempts.incrementAndGet();
                 return null;
 
             } finally {
@@ -439,8 +446,9 @@ public class MojangSkinFetcher {
     public static void applyRandomFamousSkin(BotEntity bot) {
         // Si on a des joueurs en cache, les utiliser en priorité
         if (!VERIFIED_PLAYERS_WITH_SKINS.isEmpty()) {
-            String username = VERIFIED_PLAYERS_WITH_SKINS.get(verifiedPlayerIndex % VERIFIED_PLAYERS_WITH_SKINS.size());
-            verifiedPlayerIndex++;
+            // MAJOR FIX: Use AtomicInteger.getAndIncrement() for thread-safe counter access
+            int index = verifiedPlayerIndex.getAndIncrement();
+            String username = VERIFIED_PLAYERS_WITH_SKINS.get(index % VERIFIED_PLAYERS_WITH_SKINS.size());
 
             com.aibrigade.main.AIBrigadeMod.LOGGER.info("Using cached player: {}", username);
             applyPlayerSkin(bot, username);
@@ -520,12 +528,16 @@ public class MojangSkinFetcher {
      * Affiche les statistiques de recherche de joueurs
      */
     public static void printStatistics() {
-        double successRate = totalAttempts > 0 ? (successfulFinds * 100.0 / totalAttempts) : 0;
+        // MAJOR FIX: Use .get() to read AtomicInteger values
+        int attempts = totalAttempts.get();
+        int successful = successfulFinds.get();
+        int failed = failedAttempts.get();
+        double successRate = attempts > 0 ? (successful * 100.0 / attempts) : 0;
 
         com.aibrigade.main.AIBrigadeMod.LOGGER.info("=== MojangSkinFetcher Statistics ===");
-        com.aibrigade.main.AIBrigadeMod.LOGGER.info("Total attempts: {}", totalAttempts);
-        com.aibrigade.main.AIBrigadeMod.LOGGER.info("Successful finds: {}", successfulFinds);
-        com.aibrigade.main.AIBrigadeMod.LOGGER.info("Failed attempts: {}", failedAttempts);
+        com.aibrigade.main.AIBrigadeMod.LOGGER.info("Total attempts: {}", attempts);
+        com.aibrigade.main.AIBrigadeMod.LOGGER.info("Successful finds: {}", successful);
+        com.aibrigade.main.AIBrigadeMod.LOGGER.info("Failed attempts: {}", failed);
         com.aibrigade.main.AIBrigadeMod.LOGGER.info("Success rate: {:.2f}%", successRate);
         com.aibrigade.main.AIBrigadeMod.LOGGER.info("Verified usernames cached: {}", VERIFIED_USERNAMES.size());
         com.aibrigade.main.AIBrigadeMod.LOGGER.info("Non-existent usernames cached: {}", NON_EXISTENT_USERNAMES.size());

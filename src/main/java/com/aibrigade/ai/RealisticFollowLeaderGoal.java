@@ -148,10 +148,8 @@ public class RealisticFollowLeaderGoal extends Goal {
             return false;
         }
 
-        // Si en pause, continuer l'objectif mais ne pas bouger
-        if (isPaused) {
-            return true;
-        }
+        // COMPILATION FIX: Removed isPaused check (variable doesn't exist)
+        // If pause functionality is needed, it should be re-implemented with proper state tracking
 
         return distance > minFollowDistance;
     }
@@ -234,7 +232,7 @@ public class RealisticFollowLeaderGoal extends Goal {
             if (jumpCooldown <= 0) {
                 // Vérifier que le bot se déplace
                 if (bot.getDeltaMovement().horizontalDistanceSqr() > 0.001) {
-                    bot.jumpFromGround(); // Sauter
+                    bot.performJump(); // COMPILATION FIX: Use public wrapper instead of protected jumpFromGround()
                     jumpCooldown = 8 + random.nextInt(5); // Sauter toutes les 8-12 ticks (~0.4-0.6s)
                 }
             }

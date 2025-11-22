@@ -44,7 +44,7 @@ public class SprintingMeleeAttackGoal extends MeleeAttackGoal {
             if (jumpCooldown <= 0) {
                 // Vérifier que le bot se déplace
                 if (bot.getDeltaMovement().horizontalDistanceSqr() > 0.001) {
-                    bot.jumpFromGround(); // Sauter
+                    bot.performJump(); // COMPILATION FIX: Use public wrapper instead of protected jumpFromGround()
                     jumpCooldown = 8 + random.nextInt(5); // Sauter toutes les 8-12 ticks (~0.4-0.6s)
                 }
             }

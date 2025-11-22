@@ -570,6 +570,15 @@ public class BotEntity extends PathfinderMob {
     }
 
     /**
+     * COMPILATION FIX: Public wrapper for jumpFromGround()
+     * jumpFromGround() is protected in LivingEntity and cannot be called from outside classes
+     * This public method allows helpers and goals to make the bot jump
+     */
+    public void performJump() {
+        this.jumpFromGround();
+    }
+
+    /**
      * Get the bot's behavior configuration
      * @return The behavior config
      */

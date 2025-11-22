@@ -19,7 +19,7 @@ public class BotJumpHelper {
         }
 
         if (shouldJump(bot, config)) {
-            bot.jumpFromGround(); // Utilise jumpFromGround() pour cohérence
+            bot.performJump(); // COMPILATION FIX: Use public wrapper instead of protected jumpFromGround()
         }
     }
 
@@ -30,7 +30,7 @@ public class BotJumpHelper {
         if (bot == null) {
             return;
         }
-        bot.jumpFromGround(); // Utilise jumpFromGround() pour cohérence
+        bot.performJump(); // COMPILATION FIX: Use public wrapper instead of protected jumpFromGround()
     }
 
     /**

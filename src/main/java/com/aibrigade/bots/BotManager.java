@@ -263,8 +263,10 @@ public class BotManager {
 
         group.setLeaderName(leaderName);
 
+        // MAJOR FIX: Extract HashSet allocation before loop to avoid repeated allocations
         // Update all bots in group - copy set to avoid concurrent modification
-        for (UUID botId : new HashSet<>(group.getBotIds())) {
+        Set<UUID> botIds = new HashSet<>(group.getBotIds());
+        for (UUID botId : botIds) {
             BotEntity bot = activeBots.get(botId);
             if (bot != null) {
                 UUID leaderId = findLeaderUUID(bot.level(), leaderName);
@@ -376,8 +378,10 @@ public class BotManager {
             }
         }
 
+        // MAJOR FIX: Extract HashSet allocation before loop to avoid repeated allocations
         // Set hostile state for all bots in the group - copy set to avoid concurrent modification
-        for (UUID botId : new HashSet<>(group.getBotIds())) {
+        Set<UUID> botIdsForHostile = new HashSet<>(group.getBotIds());
+        for (UUID botId : botIdsForHostile) {
             BotEntity bot = activeBots.get(botId);
             if (bot != null) {
                 bot.setHostile(hasHostileRelationships);
@@ -440,12 +444,14 @@ public class BotManager {
             // Update group radius
             group.setFollowRadius(radius);
 
+            // MAJOR FIX: Extract HashSet allocation before loop to avoid repeated allocations
             // Set follow leader for all bots in group - copy set to avoid concurrent modification
             int count = 0;
             int activeFollowers = 0;
             int radiusFollowers = 0;
 
-            for (UUID botUUID : new HashSet<>(groupBots)) {
+            Set<UUID> botUUIDs = new HashSet<>(groupBots);
+            for (UUID botUUID : botUUIDs) {
                 BotEntity bot = activeBots.get(botUUID);
                 if (bot != null) {
                     bot.setFollowingLeader(enabled);
@@ -573,8 +579,10 @@ public class BotManager {
         }
 
         int equipped = 0;
+        // MAJOR FIX: Extract HashSet allocation before loop to avoid repeated allocations
         // Copy set to avoid concurrent modification
-        for (UUID botId : new HashSet<>(group.getBotIds())) {
+        Set<UUID> botIdsForArmor = new HashSet<>(group.getBotIds());
+        for (UUID botId : botIdsForArmor) {
             BotEntity bot = activeBots.get(botId);
             if (bot != null) {
                 giveArmorToBot(bot, isFull, materials);

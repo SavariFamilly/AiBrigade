@@ -13,12 +13,20 @@ public class BotMovementHelper {
 
     /**
      * Move bot to entity with specified speed
+     * CRITICAL FIX: Added null check on getNavigation()
      */
     public static void moveToEntity(BotEntity bot, LivingEntity target, double speed) {
         if (bot == null || target == null) {
             return;
         }
-        bot.getNavigation().moveTo(target, speed);
+
+        // CRITICAL FIX: getNavigation() can return null if bot is in invalid state
+        var navigation = bot.getNavigation();
+        if (navigation == null) {
+            return;
+        }
+
+        navigation.moveTo(target, speed);
     }
 
     /**
@@ -44,22 +52,38 @@ public class BotMovementHelper {
 
     /**
      * Move bot to position with specified speed
+     * CRITICAL FIX: Added null check on getNavigation()
      */
     public static void moveToPosition(BotEntity bot, Vec3 position, double speed) {
         if (bot == null || position == null) {
             return;
         }
-        bot.getNavigation().moveTo(position.x, position.y, position.z, speed);
+
+        // CRITICAL FIX: Null check on navigation
+        var navigation = bot.getNavigation();
+        if (navigation == null) {
+            return;
+        }
+
+        navigation.moveTo(position.x, position.y, position.z, speed);
     }
 
     /**
      * Move bot to block position with specified speed
+     * CRITICAL FIX: Added null check on getNavigation()
      */
     public static void moveToBlockPos(BotEntity bot, BlockPos pos, double speed) {
         if (bot == null || pos == null) {
             return;
         }
-        bot.getNavigation().moveTo(pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5, speed);
+
+        // CRITICAL FIX: Null check on navigation
+        var navigation = bot.getNavigation();
+        if (navigation == null) {
+            return;
+        }
+
+        navigation.moveTo(pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5, speed);
     }
 
     /**
@@ -71,32 +95,56 @@ public class BotMovementHelper {
 
     /**
      * Stop bot movement
+     * CRITICAL FIX: Added null check on getNavigation()
      */
     public static void stopMovement(BotEntity bot) {
         if (bot == null) {
             return;
         }
-        bot.getNavigation().stop();
+
+        // CRITICAL FIX: Null check on navigation
+        var navigation = bot.getNavigation();
+        if (navigation == null) {
+            return;
+        }
+
+        navigation.stop();
     }
 
     /**
      * Check if bot has reached its destination
+     * CRITICAL FIX: Added null check on getNavigation()
      */
     public static boolean hasReachedDestination(BotEntity bot) {
         if (bot == null) {
             return true;
         }
-        return bot.getNavigation().isDone();
+
+        // CRITICAL FIX: Null check on navigation
+        var navigation = bot.getNavigation();
+        if (navigation == null) {
+            return true; // If no navigation, consider it "done"
+        }
+
+        return navigation.isDone();
     }
 
     /**
      * Check if bot is currently moving
+     * CRITICAL FIX: Added null check on getNavigation()
      */
     public static boolean isMoving(BotEntity bot) {
         if (bot == null) {
             return false;
         }
-        return !bot.getNavigation().isDone();
+
+        // CRITICAL FIX: Null check on navigation
+        var navigation = bot.getNavigation();
+        if (navigation == null) {
+            return false; // If no navigation, not moving
+        }
+
+        return !navigation.isDone();
     }
 
     /**

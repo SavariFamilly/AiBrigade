@@ -3,7 +3,6 @@ package com.aibrigade.bots;
 import com.aibrigade.ai.RealisticFollowLeaderGoal;
 import com.aibrigade.ai.ActiveGazeBehavior;
 import com.aibrigade.ai.TeamAwareAttackGoal;
-import com.aibrigade.ai.PlaceBlockToReachTargetGoal;
 import com.aibrigade.ai.SprintingMeleeAttackGoal;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.EntityType;
@@ -190,11 +189,8 @@ public class BotEntity extends PathfinderMob {
         RealisticFollowLeaderGoal followGoal = new RealisticFollowLeaderGoal(this, 1.0D, 3.0F, 10.0F);
         this.goalSelector.addGoal(2, followGoal);
 
-        // Priorité 3: Place blocks to reach target (avec toggle canPlaceBlocks)
-        this.goalSelector.addGoal(3, new PlaceBlockToReachTargetGoal(this));
-
-        // Priorité 4: Melee attack avec sprint et sauts (comme un joueur)
-        this.goalSelector.addGoal(4, new SprintingMeleeAttackGoal(this, 1.0D, false));
+        // Priorité 3: Melee attack avec sprint et sauts (comme un joueur)
+        this.goalSelector.addGoal(3, new SprintingMeleeAttackGoal(this, 1.0D, false));
 
         // Priorité 5: Wander when idle
         this.goalSelector.addGoal(5, new net.minecraft.world.entity.ai.goal.WaterAvoidingRandomStrollGoal(this, 0.8D));

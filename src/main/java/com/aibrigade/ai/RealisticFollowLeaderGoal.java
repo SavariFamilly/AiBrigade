@@ -56,14 +56,6 @@ public class RealisticFollowLeaderGoal extends Goal {
     private Vec3 targetPosition;         // Position cible unique du bot
     private int recalculatePathTimer;
 
-    // Variation de vitesse
-    private double currentSpeedMultiplier;
-    private int speedChangeTimer;
-
-    // Pause aléatoire
-    private int pauseTimer;
-    private boolean isPaused;
-
     // Trajectoire courbe
     private double curveOffset;
     private int curveUpdateTimer;
@@ -89,7 +81,6 @@ public class RealisticFollowLeaderGoal extends Goal {
         }
 
         // Initialiser les comportements aléatoires
-        this.currentSpeedMultiplier = 1.0; // Pas de variation, le sprint gère la vitesse
         this.isActivelyChasing = random.nextFloat() < chaseChance;
     }
 
@@ -169,16 +160,15 @@ public class RealisticFollowLeaderGoal extends Goal {
     public void start() {
         // Initialiser le mouvement
         recalculatePathTimer = 0;
-        speedChangeTimer = 0;
         curveUpdateTimer = 0;
-        pauseTimer = 0;
-        isPaused = false;
 
         // Décider si ce bot va activement chase
         updateChaseDecision();
 
-        // Activer le sprint pour suivre le leader (comme un joueur)
-        bot.setSprinting(true);
+        // Activer le sprint SEULEMENT pour les bots qui suivent activement (1/6)
+        if (behaviorType == FollowBehaviorType.ACTIVE_FOLLOW) {
+            bot.setSprinting(true);
+        }
     }
 
     @Override
@@ -202,24 +192,7 @@ public class RealisticFollowLeaderGoal extends Goal {
         // Calculer la distance au leader
         double distance = DistanceHelper.getDistance(bot, leader);
 
-        // === 2. Pause aléatoire ===
-        if (isPaused) {
-            pauseTimer--;
-            if (pauseTimer <= 0) {
-                isPaused = false;
-            }
-            BotMovementHelper.stopMovement(bot);
-            return;
-        }
-
-        // Chance de pause (5%)
-        if (random.nextFloat() < 0.05) {
-            isPaused = true;
-            pauseTimer = 10 + random.nextInt(20); // 0.5 - 1.5 secondes
-            return;
-        }
-
-        // === 3. Trajectoire courbe ===
+        // === 2. Trajectoire courbe ===
         curveUpdateTimer--;
         if (curveUpdateTimer <= 0) {
             curveOffset = (random.nextDouble() - 0.5) * 2.0; // -1.0 à +1.0
@@ -276,8 +249,10 @@ public class RealisticFollowLeaderGoal extends Goal {
         BotMovementHelper.stopMovement(bot);
         targetPosition = null;
 
-        // Désactiver le sprint quand on arrête de suivre
-        bot.setSprinting(false);
+        // Désactiver le sprint quand on arrête de suivre (seulement si c'était actif)
+        if (behaviorType == FollowBehaviorType.ACTIVE_FOLLOW) {
+            bot.setSprinting(false);
+        }
     }
 
     /**

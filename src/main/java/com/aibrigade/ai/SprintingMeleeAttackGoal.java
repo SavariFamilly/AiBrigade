@@ -55,6 +55,9 @@ public class SprintingMeleeAttackGoal extends MeleeAttackGoal {
     public void stop() {
         super.stop();
         // Désactiver le sprint quand l'attaque s'arrête
-        bot.setSprinting(false);
+        // SAUF si le bot est en train de suivre un leader (pour éviter les conflits)
+        if (!bot.isFollowingLeader()) {
+            bot.setSprinting(false);
+        }
     }
 }

@@ -19,7 +19,7 @@ public class BotJumpHelper {
         }
 
         if (shouldJump(bot, config)) {
-            bot.getJumpControl().jump();
+            bot.jumpFromGround(); // Utilise jumpFromGround() pour cohérence
         }
     }
 
@@ -30,7 +30,7 @@ public class BotJumpHelper {
         if (bot == null) {
             return;
         }
-        bot.getJumpControl().jump();
+        bot.jumpFromGround(); // Utilise jumpFromGround() pour cohérence
     }
 
     /**

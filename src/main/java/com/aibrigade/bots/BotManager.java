@@ -48,6 +48,10 @@ public class BotManager {
     // Gson for JSON serialization
     private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
 
+    // MAJOR FIX: Reusable Random instance to avoid allocations in hot paths
+    // Used by giveArmorToBot(), giveStartingEquipment() and other methods
+    private final Random random = new Random();
+
     // Maximum bots allowed
     private static final int MAX_BOTS = 300;
 
@@ -613,7 +617,9 @@ public class BotManager {
      * Give armor to a single bot
      */
     private void giveArmorToBot(BotEntity bot, boolean isFull, List<ArmorMaterial> materials) {
-        Random random = new Random();
+        // MAJOR FIX: Use instance Random instead of creating new one
+        // Old: new Random() for every bot equipped → 300 allocations when equipping group
+        // New: Use this.random → zero allocations
 
         // Armor slots: 0=helmet, 1=chestplate, 2=leggings, 3=boots
         ArmorMaterial[] chosenMaterials = new ArmorMaterial[4];
@@ -627,7 +633,7 @@ public class BotManager {
         } else {
             // Random combination with diversity rule
             for (int i = 0; i < 3; i++) {
-                chosenMaterials[i] = materials.get(random.nextInt(materials.size()));
+                chosenMaterials[i] = materials.get(this.random.nextInt(materials.size()));
             }
 
             // Diversity rule: if first 3 are same, make 4th different
@@ -638,10 +644,10 @@ public class BotManager {
                 // Pick different material for boots
                 ArmorMaterial sameMaterial = chosenMaterials[0];
                 do {
-                    chosenMaterials[3] = materials.get(random.nextInt(materials.size()));
+                    chosenMaterials[3] = materials.get(this.random.nextInt(materials.size()));
                 } while (chosenMaterials[3] == sameMaterial && materials.size() > 1);
             } else {
-                chosenMaterials[3] = materials.get(random.nextInt(materials.size()));
+                chosenMaterials[3] = materials.get(this.random.nextInt(materials.size()));
             }
         }
 
@@ -793,7 +799,8 @@ public class BotManager {
      * - Random sword (1/3 stone, 1/3 iron, 1/3 diamond) in main hand
      */
     private void giveStartingEquipment(BotEntity bot) {
-        Random random = new Random();
+        // MAJOR FIX: Use instance Random instead of creating new one
+        // Eliminates object allocations when equipping groups of bots
 
         // Give 128 oak planks in off-hand
         ItemStack planks = new ItemStack(Items.OAK_PLANKS, 128);
@@ -801,7 +808,7 @@ public class BotManager {
 
         // Give random sword (1/3 each type)
         ItemStack sword;
-        int swordType = random.nextInt(3);
+        int swordType = this.random.nextInt(3);
         if (swordType == 0) {
             sword = new ItemStack(Items.STONE_SWORD);
         } else if (swordType == 1) {
@@ -826,8 +833,8 @@ public class BotManager {
             "heavy"
         };
 
-        Random random = new Random();
-        return availableSkins[random.nextInt(availableSkins.length)];
+        // MAJOR FIX: Use instance Random instead of creating new one
+        return availableSkins[this.random.nextInt(availableSkins.length)];
     }
 
     /**

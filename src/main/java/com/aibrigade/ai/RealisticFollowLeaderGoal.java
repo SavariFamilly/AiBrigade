@@ -278,17 +278,17 @@ public class RealisticFollowLeaderGoal extends Goal {
     private Vec3 calculateClosePosition(LivingEntity leader) {
         Vec3 leaderPos = leader.position();
 
-        // Utiliser l'UUID pour avoir une position cohérente
-        long seed = bot.getUUID().getMostSignificantBits() ^ leader.getUUID().getMostSignificantBits();
-        Random posRandom = new Random(seed + (System.currentTimeMillis() / 1000));
+        // MAJOR FIX: Use instance Random instead of creating new one (prevent GC pressure)
+        // Old: new Random() created every call → 1000+ allocations/sec with 300 bots
+        // New: Reuse this.random → zero allocations
 
         // Angle unique basé sur l'UUID
         double baseAngle = (bot.getUUID().getMostSignificantBits() % 360) * Math.PI / 180.0;
-        double angleVariation = (posRandom.nextDouble() - 0.5) * 0.3;
+        double angleVariation = (random.nextDouble() - 0.5) * 0.3;
         double angle = baseAngle + angleVariation;
 
         // Distance très proche (2-4 blocs du leader)
-        double distance = minFollowDistance + posRandom.nextDouble() * 2.0;
+        double distance = minFollowDistance + random.nextDouble() * 2.0;
 
         // Calculer la position
         double offsetX = Math.cos(angle) * distance;
@@ -316,20 +316,20 @@ public class RealisticFollowLeaderGoal extends Goal {
     private Vec3 calculateSpreadPosition(LivingEntity leader) {
         Vec3 leaderPos = leader.position();
 
-        // Utiliser l'UUID pour avoir une position cohérente mais unique
-        long seed = bot.getUUID().getMostSignificantBits() ^ leader.getUUID().getMostSignificantBits();
-        Random posRandom = new Random(seed + (System.currentTimeMillis() / 1000)); // Change chaque seconde
+        // MAJOR FIX: Use instance Random instead of creating new one (prevent GC pressure)
+        // Old: new Random() created every call → 1000+ allocations/sec with 300 bots
+        // New: Reuse this.random → zero allocations
 
         // Angle basé sur l'UUID (chaque bot a son propre angle)
         double baseAngle = (bot.getUUID().getMostSignificantBits() % 360) * Math.PI / 180.0;
 
         // Ajouter une légère variation
-        double angleVariation = (posRandom.nextDouble() - 0.5) * 0.5; // ±0.25 radians
+        double angleVariation = (random.nextDouble() - 0.5) * 0.5; // ±0.25 radians
         double angle = baseAngle + angleVariation;
 
         // Distance dans le rayon (70% - 90% du rayon max pour éviter les bords)
         float radius = bot.getFollowRadius();
-        double distance = radius * (0.7 + posRandom.nextDouble() * 0.2);
+        double distance = radius * (0.7 + random.nextDouble() * 0.2);
 
         // Calculer la position
         double offsetX = Math.cos(angle) * distance;

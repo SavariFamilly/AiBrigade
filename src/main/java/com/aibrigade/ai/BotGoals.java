@@ -377,7 +377,14 @@ public class BotGoals {
          * Check if path is blocked by obstacle
          */
         private boolean isPathBlocked() {
-            Path path = bot.getNavigation().getPath();
+            // MAJOR FIX #30: Add null check for getNavigation()
+            // getNavigation() can return null - must check before calling getPath()
+            var navigation = bot.getNavigation();
+            if (navigation == null) {
+                return false;
+            }
+
+            Path path = navigation.getPath();
             if (path == null || path.isDone()) {
                 return false;
             }

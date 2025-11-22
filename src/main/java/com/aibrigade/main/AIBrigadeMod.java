@@ -56,9 +56,12 @@ public class AIBrigadeMod {
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_NAME);
 
     // Core managers
-    private static BotManager botManager;
-    private static AIManager aiManager;
-    private static ConfigManager configManager;
+    // MAJOR FIX: Added volatile for thread-safe visibility across threads
+    // These managers are initialized in enqueueWork() (separate thread)
+    // Without volatile, other threads may see stale null values
+    private static volatile BotManager botManager;
+    private static volatile AIManager aiManager;
+    private static volatile ConfigManager configManager;
 
     /**
      * Mod constructor - Called when mod is loaded by Forge
@@ -139,6 +142,17 @@ public class AIBrigadeMod {
     public void onServerStarting(ServerStartingEvent event) {
         LOGGER.info("Server starting - Loading AIBrigade data");
 
+        // MAJOR FIX #33: Add null checks for managers before use
+        if (botManager == null) {
+            LOGGER.error("BotManager not initialized - cannot load persistent data. Setup may have failed.");
+            return;
+        }
+
+        if (aiManager == null) {
+            LOGGER.error("AIManager not initialized - cannot start AI ticking. Setup may have failed.");
+            return;
+        }
+
         // Initialize BotDatabase
         var worldPath = event.getServer().overworld().getLevel().getServer()
             .getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT);
@@ -168,11 +182,20 @@ public class AIBrigadeMod {
         BotDatabase.saveDatabase();
         LOGGER.info("BotDatabase saved");
 
-        // Save bot and group data
-        botManager.savePersistentData(event.getServer());
+        // MAJOR FIX #33: Add null checks for managers before use
+        if (botManager != null) {
+            // Save bot and group data
+            botManager.savePersistentData(event.getServer());
+        } else {
+            LOGGER.error("BotManager not initialized - cannot save persistent data. Data may be lost!");
+        }
 
-        // Stop AI ticking and cleanup
-        aiManager.stopAITicking();
+        if (aiManager != null) {
+            // Stop AI ticking and cleanup
+            aiManager.stopAITicking();
+        } else {
+            LOGGER.error("AIManager not initialized - cannot stop AI ticking properly.");
+        }
 
         LOGGER.info("AIBrigade data saved and cleanup complete");
     }
@@ -248,25 +271,52 @@ public class AIBrigadeMod {
 
     /**
      * Get the bot manager instance
-     * @return The bot manager
+     *
+     * MAJOR FIX: Added null safety check
+     * Managers are initialized during FMLCommonSetupEvent in a separate thread
+     * If called too early (before setup completes), will return null
+     *
+     * @return The bot manager, or null if not yet initialized
      */
     public static BotManager getBotManager() {
+        if (botManager == null) {
+            LOGGER.warn("BotManager accessed before initialization - returning null. " +
+                "This may indicate the mod is being accessed too early in the load sequence.");
+        }
         return botManager;
     }
 
     /**
      * Get the AI manager instance
-     * @return The AI manager
+     *
+     * MAJOR FIX: Added null safety check
+     * Managers are initialized during FMLCommonSetupEvent in a separate thread
+     * If called too early (before setup completes), will return null
+     *
+     * @return The AI manager, or null if not yet initialized
      */
     public static AIManager getAIManager() {
+        if (aiManager == null) {
+            LOGGER.warn("AIManager accessed before initialization - returning null. " +
+                "This may indicate the mod is being accessed too early in the load sequence.");
+        }
         return aiManager;
     }
 
     /**
      * Get the configuration manager instance
-     * @return The configuration manager
+     *
+     * MAJOR FIX: Added null safety check
+     * Managers are initialized during FMLCommonSetupEvent in a separate thread
+     * If called too early (before setup completes), will return null
+     *
+     * @return The configuration manager, or null if not yet initialized
      */
     public static ConfigManager getConfigManager() {
+        if (configManager == null) {
+            LOGGER.warn("ConfigManager accessed before initialization - returning null. " +
+                "This may indicate the mod is being accessed too early in the load sequence.");
+        }
         return configManager;
     }
 }

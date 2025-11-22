@@ -1,7 +1,7 @@
 package com.aibrigade.ai;
 
 import com.aibrigade.bots.BotEntity;
-import com.aibrigade.persistence.BotDatabase;
+// MAJOR FIX: Removed BotDatabase import - eliminated 6000 DB lookups/sec in tick()
 import com.aibrigade.utils.*;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.goal.Goal;
@@ -86,12 +86,11 @@ public class ActiveGazeBehavior extends Goal {
 
     @Override
     public void tick() {
-        // Récupérer la configuration depuis la base de données
-        BotDatabase.BotData data = BotDatabase.getBotData(bot.getUUID());
-        if (data != null) {
-            lookAroundChance = data.lookAroundChance;
-            lookAroundInterval = data.lookAroundInterval;
-        }
+        // MAJOR FIX: Removed database access from tick() - CRITICAL PERFORMANCE ISSUE
+        // Old: BotDatabase.getBotData() called EVERY TICK (20 times/sec per bot)
+        // Impact: 300 bots × 20 ticks/sec = 6000 database lookups per second!
+        // Solution: Use fields already initialized in constructor (lines 63-64)
+        // These values don't change during goal lifetime - DB access was completely unnecessary
 
         // Machine à états pour le comportement de regard
         switch (gazeState) {

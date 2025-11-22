@@ -86,8 +86,10 @@ public class DebugVisualizer {
         }
 
         // Render pathfinding
-        if (showPaths && bot.getNavigation().getPath() != null) {
-            renderPath(bot, bot.getNavigation().getPath(), poseStack, buffer);
+        // MAJOR FIX #31: Add null check for getNavigation()
+        var navigation = bot.getNavigation();
+        if (showPaths && navigation != null && navigation.getPath() != null) {
+            renderPath(bot, navigation.getPath(), poseStack, buffer);
         }
 
         // Render target
@@ -289,8 +291,10 @@ public class DebugVisualizer {
         info.add("Follow Radius: " + bot.getFollowRadius());
         info.add("Static: " + bot.isStatic());
 
-        if (bot.getNavigation().getPath() != null) {
-            Path path = bot.getNavigation().getPath();
+        // MAJOR FIX #31: Add null check for getNavigation()
+        var navigation = bot.getNavigation();
+        if (navigation != null && navigation.getPath() != null) {
+            Path path = navigation.getPath();
             info.add("Path Nodes: " + path.getNodeCount());
             info.add("Path Progress: " + path.getNextNodeIndex() + "/" + path.getNodeCount());
         }

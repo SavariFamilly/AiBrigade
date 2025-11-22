@@ -89,8 +89,15 @@ public class PathfindingWrapper {
      * Calculate path using vanilla pathfinding
      */
     private static Path calculateVanillaPath(BotEntity bot, BlockPos target) {
+        // MAJOR FIX #32: Add null check for getNavigation()
+        // getNavigation() can return null - must check before calling createPath()
+        var navigation = bot.getNavigation();
+        if (navigation == null) {
+            return null;
+        }
+
         // Use Minecraft's built-in pathfinding
-        return bot.getNavigation().createPath(target, 0);
+        return navigation.createPath(target, 0);
     }
 
     /**

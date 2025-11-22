@@ -10,9 +10,27 @@ import java.util.Random;
  *
  * Génère des pseudos réalistes qui ressemblent à de vrais joueurs Minecraft
  * en combinant préfixes, suffixes et patterns courants.
+ *
+ * SECURITY NOTE - Random vs SecureRandom:
+ * This class uses java.util.Random (NOT SecureRandom) which is APPROPRIATE because:
+ * - Generating cosmetic display names for game bots (no security implications)
+ * - Predictable patterns are NOT a security risk here
+ * - Better performance than SecureRandom for high-frequency generation
+ * - No cryptographic operations or sensitive data involved
+ *
+ * IF THIS CLASS IS EVER USED FOR:
+ * - Authentication tokens
+ * - Session IDs
+ * - Passwords or secrets
+ * - UUIDs for security purposes
+ * THEN you MUST replace Random with SecureRandom !
+ *
+ * Current usage: Bot cosmetic names ONLY → Random is SAFE ✓
  */
 public class RandomUsernameGenerator {
 
+    // Using Random (not SecureRandom) is acceptable for cosmetic bot names
+    // See class javadoc for detailed security analysis
     private static final Random RANDOM = new Random();
 
     // Préfixes courants dans les pseudos Minecraft

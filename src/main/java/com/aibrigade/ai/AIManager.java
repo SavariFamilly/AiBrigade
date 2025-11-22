@@ -132,17 +132,43 @@ public class AIManager {
     public void applyGroupBehavior(String groupName, String behavior) {
         BotManager botManager = AIBrigadeMod.getBotManager();
         if (botManager == null) {
+            AIBrigadeMod.LOGGER.error("BotManager is null, cannot apply group behavior");
             return;
         }
 
-        BotManager.BotGroup group = botManager.getBotGroups().get(groupName);
+        // CRITICAL FIX: Null check on getBotGroups() return value
+        var botGroups = botManager.getBotGroups();
+        if (botGroups == null) {
+            AIBrigadeMod.LOGGER.error("Bot groups map is null");
+            return;
+        }
+
+        BotManager.BotGroup group = botGroups.get(groupName);
         if (group == null) {
             AIBrigadeMod.LOGGER.warn("Group {} not found", groupName);
             return;
         }
 
-        for (UUID botId : group.getBotIds()) {
-            BotEntity bot = botManager.getActiveBots().get(botId);
+        // CRITICAL FIX: Null check on getActiveBots() return value
+        var activeBots = botManager.getActiveBots();
+        if (activeBots == null) {
+            AIBrigadeMod.LOGGER.error("Active bots map is null");
+            return;
+        }
+
+        // CRITICAL FIX: Null check on getBotIds() return value
+        var botIds = group.getBotIds();
+        if (botIds == null) {
+            AIBrigadeMod.LOGGER.error("Bot IDs list is null for group {}", groupName);
+            return;
+        }
+
+        for (UUID botId : botIds) {
+            if (botId == null) {
+                continue; // Skip null UUIDs
+            }
+
+            BotEntity bot = activeBots.get(botId);
             if (bot != null) {
                 bot.setBehaviorType(behavior);
                 AIBrigadeMod.LOGGER.debug("Applied behavior {} to bot {}",
@@ -163,10 +189,18 @@ public class AIManager {
     public void setGroupRadius(String groupName, float radius) {
         BotManager botManager = AIBrigadeMod.getBotManager();
         if (botManager == null) {
+            AIBrigadeMod.LOGGER.error("BotManager is null, cannot set group radius");
             return;
         }
 
-        BotManager.BotGroup group = botManager.getBotGroups().get(groupName);
+        // CRITICAL FIX: Null check on getBotGroups() return value
+        var botGroups = botManager.getBotGroups();
+        if (botGroups == null) {
+            AIBrigadeMod.LOGGER.error("Bot groups map is null");
+            return;
+        }
+
+        BotManager.BotGroup group = botGroups.get(groupName);
         if (group == null) {
             AIBrigadeMod.LOGGER.warn("Group {} not found", groupName);
             return;
@@ -174,8 +208,25 @@ public class AIManager {
 
         group.setFollowRadius(radius);
 
-        for (UUID botId : group.getBotIds()) {
-            BotEntity bot = botManager.getActiveBots().get(botId);
+        // CRITICAL FIX: Null check on getActiveBots() and getBotIds() return values
+        var activeBots = botManager.getActiveBots();
+        if (activeBots == null) {
+            AIBrigadeMod.LOGGER.error("Active bots map is null");
+            return;
+        }
+
+        var botIds = group.getBotIds();
+        if (botIds == null) {
+            AIBrigadeMod.LOGGER.error("Bot IDs list is null for group {}", groupName);
+            return;
+        }
+
+        for (UUID botId : botIds) {
+            if (botId == null) {
+                continue; // Skip null UUIDs
+            }
+
+            BotEntity bot = activeBots.get(botId);
             if (bot != null) {
                 bot.setFollowRadius(radius);
             }
@@ -193,14 +244,45 @@ public class AIManager {
     public void toggleStatic(String targetName) {
         BotManager botManager = AIBrigadeMod.getBotManager();
         if (botManager == null) {
+            AIBrigadeMod.LOGGER.error("BotManager is null, cannot toggle static");
+            return;
+        }
+
+        // CRITICAL FIX: Null check on getBotGroups() return value
+        var botGroups = botManager.getBotGroups();
+        if (botGroups == null) {
+            AIBrigadeMod.LOGGER.error("Bot groups map is null");
+            return;
+        }
+
+        // CRITICAL FIX: Null check on getActiveBots() return value
+        var activeBots = botManager.getActiveBots();
+        if (activeBots == null) {
+            AIBrigadeMod.LOGGER.error("Active bots map is null");
             return;
         }
 
         // Check if it's a group
-        if (botManager.getBotGroups().containsKey(targetName)) {
-            BotManager.BotGroup group = botManager.getBotGroups().get(targetName);
-            for (UUID botId : group.getBotIds()) {
-                BotEntity bot = botManager.getActiveBots().get(botId);
+        if (botGroups.containsKey(targetName)) {
+            BotManager.BotGroup group = botGroups.get(targetName);
+            if (group == null) {
+                AIBrigadeMod.LOGGER.warn("Group {} is null", targetName);
+                return;
+            }
+
+            // CRITICAL FIX: Null check on getBotIds() return value
+            var botIds = group.getBotIds();
+            if (botIds == null) {
+                AIBrigadeMod.LOGGER.error("Bot IDs list is null for group {}", targetName);
+                return;
+            }
+
+            for (UUID botId : botIds) {
+                if (botId == null) {
+                    continue; // Skip null UUIDs
+                }
+
+                BotEntity bot = activeBots.get(botId);
                 if (bot != null) {
                     bot.setStatic(!bot.isStatic());
                 }
@@ -208,8 +290,8 @@ public class AIManager {
             AIBrigadeMod.LOGGER.info("Toggled static state for group {}", targetName);
         } else {
             // Try to find individual bot
-            for (BotEntity bot : botManager.getActiveBots().values()) {
-                if (bot.getBotName().equalsIgnoreCase(targetName)) {
+            for (BotEntity bot : activeBots.values()) {
+                if (bot != null && bot.getBotName() != null && bot.getBotName().equalsIgnoreCase(targetName)) {
                     bot.setStatic(!bot.isStatic());
                     AIBrigadeMod.LOGGER.info("Toggled static state for bot {}", targetName);
                     return;

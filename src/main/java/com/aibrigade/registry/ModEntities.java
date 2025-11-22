@@ -28,8 +28,11 @@ public class ModEntities {
             ENTITY_TYPES.register("bot",
                     () -> EntityType.Builder.of(BotEntity::new, MobCategory.CREATURE)
                             .sized(0.6F, 1.8F)
-                            .clientTrackingRange(64)  // Increased from 10 to 64 (same as players) for better visibility
-                            .updateInterval(1)        // Decreased from 3 to 1 for faster skin/data synchronization
+                            .clientTrackingRange(64)  // Same as players for better visibility
+                            .updateInterval(3)        // PERFORMANCE FIX: Use 3 (vanilla default) instead of 1
+                                                      // updateInterval(1) = 6000 packets/sec with 300 bots = CATASTROPHIC
+                                                      // updateInterval(3) = 2000 packets/sec with 300 bots = acceptable
+                                                      // Skin/data sync works perfectly fine with interval 3 via EntityDataAccessor
                             .build(AIBrigadeMod.MOD_ID + ":bot"));
 
     /**

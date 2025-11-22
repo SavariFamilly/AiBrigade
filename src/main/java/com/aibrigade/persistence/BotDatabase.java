@@ -9,6 +9,7 @@ import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -153,8 +154,12 @@ public class BotDatabase {
 
     /**
      * Sauvegarde la base de données dans le fichier JSON
+     * Uses atomic write pattern to prevent corruption if server crashes during save
      */
     public static void saveDatabase() {
+        // Create temp file path in the same directory for atomic move
+        Path tempPath = DATABASE_PATH.getParent().resolve(DATABASE_PATH.getFileName() + ".tmp");
+
         try {
             JsonObject root = new JsonObject();
             JsonArray botsArray = new JsonArray();
@@ -170,14 +175,30 @@ public class BotDatabase {
             root.addProperty("lastSaved", System.currentTimeMillis());
 
             String json = GSON.toJson(root);
-            Files.writeString(DATABASE_PATH, json);
 
-            System.out.println("[BotDatabase] Sauvegardé " + BOT_DATABASE.size() + " bots");
+            // ATOMIC WRITE PATTERN:
+            // 1. Write to temporary file
+            Files.writeString(tempPath, json);
+
+            // 2. Atomic move (replace) - Guarantees either old file exists or new file exists, never corrupted
+            // ATOMIC_MOVE ensures that the operation is atomic at filesystem level
+            Files.move(tempPath, DATABASE_PATH, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+
+            System.out.println("[BotDatabase] Sauvegardé " + BOT_DATABASE.size() + " bots (atomic write)");
             isDirty = false;
 
         } catch (Exception e) {
             System.err.println("[BotDatabase] Erreur lors de la sauvegarde: " + e.getMessage());
             e.printStackTrace();
+
+            // Clean up temp file if it exists
+            try {
+                if (Files.exists(tempPath)) {
+                    Files.delete(tempPath);
+                }
+            } catch (IOException cleanupEx) {
+                // Ignore cleanup errors
+            }
         }
     }
 
@@ -185,6 +206,12 @@ public class BotDatabase {
      * Enregistre un nouveau bot dans la base de données
      */
     public static BotData registerBot(BotEntity bot) {
+        // MAJOR FIX #37: Add null check on bot parameter
+        if (bot == null) {
+            System.err.println("[BotDatabase] Cannot register bot - bot entity is null");
+            return null;
+        }
+
         BotData data = new BotData();
         data.botUUID = bot.getUUID();
 
@@ -202,6 +229,12 @@ public class BotDatabase {
      * Met à jour les données d'un bot existant
      */
     public static void updateBot(BotEntity bot) {
+        // MAJOR FIX #37: Add null check on bot parameter
+        if (bot == null) {
+            System.err.println("[BotDatabase] Cannot update bot - bot entity is null");
+            return;
+        }
+
         UUID uuid = bot.getUUID();
         BotData data = BOT_DATABASE.get(uuid);
 
@@ -219,6 +252,12 @@ public class BotDatabase {
      * Copie les données du BotEntity vers BotData
      */
     private static void updateBotData(BotData data, BotEntity bot) {
+        // MAJOR FIX #37: Add null checks on parameters
+        if (data == null || bot == null) {
+            System.err.println("[BotDatabase] Cannot update bot data - null parameter (data=" + data + ", bot=" + bot + ")");
+            return;
+        }
+
         // Identité
         data.playerUUID = bot.getPlayerUUID();
         data.skinTextureValue = bot.getSkinTextureValue();
@@ -260,6 +299,12 @@ public class BotDatabase {
      * Applique les données sauvegardées à un BotEntity
      */
     public static void applyDataToBot(BotEntity bot) {
+        // MAJOR FIX #37: Add null check on bot parameter
+        if (bot == null) {
+            System.err.println("[BotDatabase] Cannot apply data - bot entity is null");
+            return;
+        }
+
         UUID uuid = bot.getUUID();
         BotData data = BOT_DATABASE.get(uuid);
 
@@ -281,8 +326,31 @@ public class BotDatabase {
         bot.setFollowingLeader(data.isFollowingLeader);
 
         // Appliquer l'état
-        bot.setAIState(BotEntity.BotAIState.valueOf(data.aiState));
-        bot.setRole(BotEntity.BotRole.valueOf(data.role));
+        // MAJOR FIX #38: Safely parse enum values with try-catch and fallback
+        // valueOf() throws IllegalArgumentException if value doesn't match enum constant
+        // This can happen if data is corrupted or from older version with different enums
+        try {
+            if (data.aiState != null && !data.aiState.isEmpty()) {
+                bot.setAIState(BotEntity.BotAIState.valueOf(data.aiState));
+            } else {
+                bot.setAIState(BotEntity.BotAIState.IDLE); // Default fallback
+            }
+        } catch (IllegalArgumentException e) {
+            System.err.println("[BotDatabase] Invalid AI state '" + data.aiState + "', using IDLE. Error: " + e.getMessage());
+            bot.setAIState(BotEntity.BotAIState.IDLE);
+        }
+
+        try {
+            if (data.role != null && !data.role.isEmpty()) {
+                bot.setRole(BotEntity.BotRole.valueOf(data.role));
+            } else {
+                bot.setRole(BotEntity.BotRole.SOLDIER); // Default fallback
+            }
+        } catch (IllegalArgumentException e) {
+            System.err.println("[BotDatabase] Invalid role '" + data.role + "', using SOLDIER. Error: " + e.getMessage());
+            bot.setRole(BotEntity.BotRole.SOLDIER);
+        }
+
         bot.setBehaviorType(data.behaviorType);
         bot.setStatic(data.isStatic);
         bot.setFollowRadius(data.followRadius);

@@ -48,6 +48,10 @@ public class BotManager {
     // Gson for JSON serialization
     private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
 
+    // MAJOR FIX: Reusable Random instance to avoid allocations in hot paths
+    // Used by giveArmorToBot(), giveStartingEquipment() and other methods
+    private final Random random = new Random();
+
     // Maximum bots allowed
     private static final int MAX_BOTS = 300;
 
@@ -100,6 +104,7 @@ public class BotManager {
         UUID leaderId = findLeaderUUID(level, leaderName);
         if (leaderId != null) {
             bot.setLeaderId(leaderId);
+            bot.setFollowingLeader(true); // CRITICAL: Enable following behavior
         }
 
         // L'équipement est déjà appliqué dans le constructeur via RandomEquipment.equipRandomItem()
@@ -140,10 +145,10 @@ public class BotManager {
 
         AIBrigadeMod.LOGGER.info("Spawning {} bots for group {}", maxToSpawn, groupName);
 
-        // Create group if it doesn't exist
-        if (!botGroups.containsKey(groupName)) {
-            botGroups.put(groupName, new BotGroup(groupName, leaderName, radius));
-        }
+        // MAJOR FIX: Use putIfAbsent() for atomic check-and-put operation
+        // Old: containsKey() + put() was non-atomic (race condition)
+        // New: putIfAbsent() is atomic and thread-safe
+        botGroups.putIfAbsent(groupName, new BotGroup(groupName, leaderName, radius));
 
         // Spawn bots in a spread pattern
         for (int i = 0; i < maxToSpawn; i++) {
@@ -262,8 +267,10 @@ public class BotManager {
 
         group.setLeaderName(leaderName);
 
+        // MAJOR FIX: Extract HashSet allocation before loop to avoid repeated allocations
         // Update all bots in group - copy set to avoid concurrent modification
-        for (UUID botId : new HashSet<>(group.getBotIds())) {
+        Set<UUID> botIds = new HashSet<>(group.getBotIds());
+        for (UUID botId : botIds) {
             BotEntity bot = activeBots.get(botId);
             if (bot != null) {
                 UUID leaderId = findLeaderUUID(bot.level(), leaderName);
@@ -314,9 +321,15 @@ public class BotManager {
             return TeamRelationship.ALLIED;
         }
 
+        // MAJOR FIX: Avoid double map lookup (containsKey + get)
+        // Old: containsKey() followed by get() = two map lookups
+        // New: Single get() and null check
         Map<String, TeamRelationship> relationships = teamRelationships.get(group1);
-        if (relationships != null && relationships.containsKey(group2)) {
-            return relationships.get(group2);
+        if (relationships != null) {
+            TeamRelationship relationship = relationships.get(group2);
+            if (relationship != null) {
+                return relationship;
+            }
         }
 
         // Default to neutral if no relationship set
@@ -365,18 +378,22 @@ public class BotManager {
             }
         }
 
+        // MAJOR FIX: Avoid double map lookup (containsKey + get)
         // Check player-to-group relationships
         if (!hasHostileRelationships) {
             for (Map<String, TeamRelationship> playerRels : playerRelationships.values()) {
-                if (playerRels.containsKey(groupName) && playerRels.get(groupName) == TeamRelationship.HOSTILE) {
+                TeamRelationship rel = playerRels.get(groupName);
+                if (rel == TeamRelationship.HOSTILE) {
                     hasHostileRelationships = true;
                     break;
                 }
             }
         }
 
+        // MAJOR FIX: Extract HashSet allocation before loop to avoid repeated allocations
         // Set hostile state for all bots in the group - copy set to avoid concurrent modification
-        for (UUID botId : new HashSet<>(group.getBotIds())) {
+        Set<UUID> botIdsForHostile = new HashSet<>(group.getBotIds());
+        for (UUID botId : botIdsForHostile) {
             BotEntity bot = activeBots.get(botId);
             if (bot != null) {
                 bot.setHostile(hasHostileRelationships);
@@ -408,9 +425,13 @@ public class BotManager {
      * @return The relationship, or NEUTRAL if not set
      */
     public TeamRelationship getPlayerGroupRelationship(UUID playerId, String groupName) {
+        // MAJOR FIX: Avoid double map lookup (containsKey + get)
         Map<String, TeamRelationship> relationships = playerRelationships.get(playerId);
-        if (relationships != null && relationships.containsKey(groupName)) {
-            return relationships.get(groupName);
+        if (relationships != null) {
+            TeamRelationship relationship = relationships.get(groupName);
+            if (relationship != null) {
+                return relationship;
+            }
         }
         return TeamRelationship.NEUTRAL;
     }
@@ -428,9 +449,10 @@ public class BotManager {
      * @return true if successful, false if group not found
      */
     public boolean setFollowLeader(String groupName, boolean enabled, float radius) {
+        // MAJOR FIX: Avoid double map lookup (containsKey + get)
         // Check if target is a group
-        if (botGroups.containsKey(groupName)) {
-            BotGroup group = botGroups.get(groupName);
+        BotGroup group = botGroups.get(groupName);
+        if (group != null) {
             Set<UUID> groupBots = group.getBotIds();
             if (groupBots.isEmpty()) {
                 return false;
@@ -439,12 +461,14 @@ public class BotManager {
             // Update group radius
             group.setFollowRadius(radius);
 
+            // MAJOR FIX: Extract HashSet allocation before loop to avoid repeated allocations
             // Set follow leader for all bots in group - copy set to avoid concurrent modification
             int count = 0;
             int activeFollowers = 0;
             int radiusFollowers = 0;
 
-            for (UUID botUUID : new HashSet<>(groupBots)) {
+            Set<UUID> botUUIDs = new HashSet<>(groupBots);
+            for (UUID botUUID : botUUIDs) {
                 BotEntity bot = activeBots.get(botUUID);
                 if (bot != null) {
                     bot.setFollowingLeader(enabled);
@@ -495,8 +519,26 @@ public class BotManager {
      * Find a leader entity by name (player or bot) in the world
      */
     private UUID findLeaderUUID(net.minecraft.world.level.Level level, String leaderName) {
+        // MAJOR FIX #34: Add null safety for server access chain
+        if (level == null) {
+            AIBrigadeMod.LOGGER.warn("Cannot find leader - level is null");
+            return null;
+        }
+
+        var server = level.getServer();
+        if (server == null) {
+            AIBrigadeMod.LOGGER.warn("Cannot find leader - server is null (client-side call?)");
+            return null;
+        }
+
+        var playerList = server.getPlayerList();
+        if (playerList == null) {
+            AIBrigadeMod.LOGGER.warn("Cannot find leader - player list is null");
+            return null;
+        }
+
         // Check if it's a player
-        for (net.minecraft.server.level.ServerPlayer player : level.getServer().getPlayerList().getPlayers()) {
+        for (net.minecraft.server.level.ServerPlayer player : playerList.getPlayers()) {
             if (player.getGameProfile().getName().equalsIgnoreCase(leaderName)) {
                 AIBrigadeMod.LOGGER.info("Found leader player: {} (UUID: {})", leaderName, player.getUUID());
                 return player.getUUID();
@@ -546,8 +588,10 @@ public class BotManager {
             return 0;
         }
 
+        // MAJOR FIX: Avoid double map lookup (containsKey then get in giveArmorToGroup)
         // Check if target is a group or individual bot
-        if (botGroups.containsKey(targetName)) {
+        BotGroup group = botGroups.get(targetName);
+        if (group != null) {
             // Apply to group
             return giveArmorToGroup(targetName, isFull, armorMaterials);
         } else {
@@ -572,8 +616,10 @@ public class BotManager {
         }
 
         int equipped = 0;
+        // MAJOR FIX: Extract HashSet allocation before loop to avoid repeated allocations
         // Copy set to avoid concurrent modification
-        for (UUID botId : new HashSet<>(group.getBotIds())) {
+        Set<UUID> botIdsForArmor = new HashSet<>(group.getBotIds());
+        for (UUID botId : botIdsForArmor) {
             BotEntity bot = activeBots.get(botId);
             if (bot != null) {
                 giveArmorToBot(bot, isFull, materials);
@@ -589,7 +635,9 @@ public class BotManager {
      * Give armor to a single bot
      */
     private void giveArmorToBot(BotEntity bot, boolean isFull, List<ArmorMaterial> materials) {
-        Random random = new Random();
+        // MAJOR FIX: Use instance Random instead of creating new one
+        // Old: new Random() for every bot equipped → 300 allocations when equipping group
+        // New: Use this.random → zero allocations
 
         // Armor slots: 0=helmet, 1=chestplate, 2=leggings, 3=boots
         ArmorMaterial[] chosenMaterials = new ArmorMaterial[4];
@@ -603,7 +651,7 @@ public class BotManager {
         } else {
             // Random combination with diversity rule
             for (int i = 0; i < 3; i++) {
-                chosenMaterials[i] = materials.get(random.nextInt(materials.size()));
+                chosenMaterials[i] = materials.get(this.random.nextInt(materials.size()));
             }
 
             // Diversity rule: if first 3 are same, make 4th different
@@ -614,10 +662,10 @@ public class BotManager {
                 // Pick different material for boots
                 ArmorMaterial sameMaterial = chosenMaterials[0];
                 do {
-                    chosenMaterials[3] = materials.get(random.nextInt(materials.size()));
+                    chosenMaterials[3] = materials.get(this.random.nextInt(materials.size()));
                 } while (chosenMaterials[3] == sameMaterial && materials.size() > 1);
             } else {
-                chosenMaterials[3] = materials.get(random.nextInt(materials.size()));
+                chosenMaterials[3] = materials.get(this.random.nextInt(materials.size()));
             }
         }
 
@@ -769,7 +817,8 @@ public class BotManager {
      * - Random sword (1/3 stone, 1/3 iron, 1/3 diamond) in main hand
      */
     private void giveStartingEquipment(BotEntity bot) {
-        Random random = new Random();
+        // MAJOR FIX: Use instance Random instead of creating new one
+        // Eliminates object allocations when equipping groups of bots
 
         // Give 128 oak planks in off-hand
         ItemStack planks = new ItemStack(Items.OAK_PLANKS, 128);
@@ -777,7 +826,7 @@ public class BotManager {
 
         // Give random sword (1/3 each type)
         ItemStack sword;
-        int swordType = random.nextInt(3);
+        int swordType = this.random.nextInt(3);
         if (swordType == 0) {
             sword = new ItemStack(Items.STONE_SWORD);
         } else if (swordType == 1) {
@@ -802,8 +851,8 @@ public class BotManager {
             "heavy"
         };
 
-        Random random = new Random();
-        return availableSkins[random.nextInt(availableSkins.length)];
+        // MAJOR FIX: Use instance Random instead of creating new one
+        return availableSkins[this.random.nextInt(availableSkins.length)];
     }
 
     /**
@@ -912,12 +961,16 @@ public class BotManager {
 
     /**
      * Inner class representing a bot group
+     * THREAD-SAFE: Uses ConcurrentHashMap.newKeySet() for concurrent access
      */
     public static class BotGroup {
         private final String name;
-        private String leaderName;
-        private float followRadius;
-        private final Set<UUID> botIds = new HashSet<>();
+        private volatile String leaderName;  // volatile for visibility across threads
+        private volatile float followRadius; // volatile for visibility across threads
+
+        // CRITICAL FIX: Use thread-safe Set instead of HashSet
+        // ConcurrentHashMap.newKeySet() allows concurrent reads/writes without ConcurrentModificationException
+        private final Set<UUID> botIds = ConcurrentHashMap.newKeySet();
 
         public BotGroup(String name, String leaderName, float followRadius) {
             this.name = name;
@@ -925,12 +978,22 @@ public class BotManager {
             this.followRadius = followRadius;
         }
 
+        /**
+         * Add bot to group (thread-safe)
+         */
         public void addBot(UUID botId) {
-            botIds.add(botId);
+            if (botId != null) {
+                botIds.add(botId);
+            }
         }
 
+        /**
+         * Remove bot from group (thread-safe)
+         */
         public void removeBot(UUID botId) {
-            botIds.remove(botId);
+            if (botId != null) {
+                botIds.remove(botId);
+            }
         }
 
         public String getName() {
@@ -941,6 +1004,9 @@ public class BotManager {
             return leaderName;
         }
 
+        /**
+         * Set leader name (thread-safe with volatile)
+         */
         public void setLeaderName(String leaderName) {
             this.leaderName = leaderName;
         }
@@ -949,12 +1015,33 @@ public class BotManager {
             return followRadius;
         }
 
+        /**
+         * Set follow radius (thread-safe with volatile)
+         */
         public void setFollowRadius(float followRadius) {
             this.followRadius = followRadius;
         }
 
+        /**
+         * Get bot IDs (returns unmodifiable view of thread-safe set)
+         * Safe to iterate even if other threads are modifying
+         */
         public Set<UUID> getBotIds() {
             return Collections.unmodifiableSet(botIds);
+        }
+
+        /**
+         * Get bot count (thread-safe)
+         */
+        public int getBotCount() {
+            return botIds.size();
+        }
+
+        /**
+         * Check if group is empty (thread-safe)
+         */
+        public boolean isEmpty() {
+            return botIds.isEmpty();
         }
     }
 

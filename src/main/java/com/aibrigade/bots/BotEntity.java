@@ -3,7 +3,7 @@ package com.aibrigade.bots;
 import com.aibrigade.ai.RealisticFollowLeaderGoal;
 import com.aibrigade.ai.ActiveGazeBehavior;
 import com.aibrigade.ai.TeamAwareAttackGoal;
-import com.aibrigade.ai.PlaceBlockToReachTargetGoal;
+import com.aibrigade.ai.SprintingMeleeAttackGoal;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
@@ -99,10 +99,10 @@ public class BotEntity extends PathfinderMob {
     // Behavior configuration
     private BotBehaviorConfig behaviorConfig;
 
-    // Equipment and inventory
-    private ItemStack[] armorSlots = new ItemStack[4]; // Head, chest, legs, boots
-    private ItemStack mainHandItem = ItemStack.EMPTY;
-    private ItemStack offHandItem = ItemStack.EMPTY;
+    // MAJOR FIX: Removed redundant equipment fields (#18, #19)
+    // Equipment is already managed by Minecraft's native LivingEntity.setItemSlot()
+    // Double storage caused memory waste (1200 ItemStacks with 300 bots) and potential inconsistencies
+    // Now using getItemBySlot() and setItemSlot() directly
 
     /**
      * Constructor for BotEntity
@@ -119,10 +119,8 @@ public class BotEntity extends PathfinderMob {
         // Initialize behavior config with default soldier preset
         this.behaviorConfig = BotBehaviorConfig.createSoldier();
 
-        // Initialize armor slots
-        for (int i = 0; i < armorSlots.length; i++) {
-            armorSlots[i] = ItemStack.EMPTY;
-        }
+        // MAJOR FIX: Removed armor slots initialization (redundant fields removed)
+        // Equipment is managed directly by Minecraft's LivingEntity system
 
         // Apply random Mojang skin and equipment
         if (!level.isClientSide) {
@@ -164,7 +162,7 @@ public class BotEntity extends PathfinderMob {
     public static AttributeSupplier.Builder createAttributes() {
         return PathfinderMob.createMobAttributes()
             .add(Attributes.MAX_HEALTH, 20.0D)
-            .add(Attributes.MOVEMENT_SPEED, 0.1D) // Vitesse identique au joueur
+            .add(Attributes.MOVEMENT_SPEED, 0.1D) // Vitesse identique au joueur (sprint géré par setSprinting)
             .add(Attributes.ATTACK_DAMAGE, 3.0D)
             .add(Attributes.ARMOR, 2.0D)
             .add(Attributes.FOLLOW_RANGE, 32.0D)
@@ -186,14 +184,11 @@ public class BotEntity extends PathfinderMob {
         this.goalSelector.addGoal(1, new ActiveGazeBehavior(this));
 
         // Priorité 2: Realistic follow leader (avec probabilités et variations)
-        RealisticFollowLeaderGoal followGoal = new RealisticFollowLeaderGoal(this, 1.1D, 3.0F, 10.0F);
+        RealisticFollowLeaderGoal followGoal = new RealisticFollowLeaderGoal(this, 1.0D, 3.0F, 10.0F);
         this.goalSelector.addGoal(2, followGoal);
 
-        // Priorité 3: Place blocks to reach target (avec toggle canPlaceBlocks)
-        this.goalSelector.addGoal(3, new PlaceBlockToReachTargetGoal(this));
-
-        // Priorité 4: Melee attack
-        this.goalSelector.addGoal(4, new net.minecraft.world.entity.ai.goal.MeleeAttackGoal(this, 1.2D, false));
+        // Priorité 3: Melee attack avec sprint et sauts (comme un joueur)
+        this.goalSelector.addGoal(3, new SprintingMeleeAttackGoal(this, 1.0D, false));
 
         // Priorité 5: Wander when idle
         this.goalSelector.addGoal(5, new net.minecraft.world.entity.ai.goal.WaterAvoidingRandomStrollGoal(this, 0.8D));
@@ -242,9 +237,9 @@ public class BotEntity extends PathfinderMob {
     public void aiStep() {
         // Only run on server - client just renders
         if (!this.level().isClientSide) {
-            // Performance optimization: disable pathfinding for static and very distant bots
-            if (!BotPerformanceOptimizer.shouldEnablePathfinding(this)) {
-                // Stop navigation to save CPU
+            // Performance optimization: disable pathfinding for static bots only
+            // NOTE: Removed distance check - was too aggressive and prevented bots from moving
+            if (this.isStatic()) {
                 this.getNavigation().stop();
             }
         }
@@ -596,13 +591,16 @@ public class BotEntity extends PathfinderMob {
     /**
      * Equip armor piece in specific slot
      *
+     * MAJOR FIX: Removed double storage - now uses only Minecraft native storage
+     * Old: Stored in armorSlots[] AND setItemSlot() → memory waste + inconsistencies
+     * New: Stores directly in setItemSlot() only
+     *
      * @param slot The armor slot (0=helmet, 1=chestplate, 2=leggings, 3=boots)
      * @param item The armor item
      */
     public void setArmorSlot(int slot, ItemStack item) {
         if (slot >= 0 && slot < 4) {
-            armorSlots[slot] = item;
-            // Update visual equipment
+            // MAJOR FIX: Direct storage in Minecraft's equipment system only
             // Minecraft armor slots: FEET=0, LEGS=1, CHEST=2, HEAD=3
             // Our slots: 0=helmet, 1=chestplate, 2=leggings, 3=boots
             EquipmentSlot equipmentSlot;
@@ -620,12 +618,25 @@ public class BotEntity extends PathfinderMob {
     /**
      * Get armor in specific slot
      *
-     * @param slot The armor slot
+     * MAJOR FIX: Reads directly from Minecraft native storage
+     * Old: Read from armorSlots[] → could be out of sync with actual equipment
+     * New: Reads from getItemBySlot() → always correct
+     *
+     * @param slot The armor slot (0=helmet, 1=chestplate, 2=leggings, 3=boots)
      * @return The armor item
      */
     public ItemStack getArmorSlot(int slot) {
         if (slot >= 0 && slot < 4) {
-            return armorSlots[slot];
+            // MAJOR FIX: Read directly from Minecraft's equipment system
+            EquipmentSlot equipmentSlot;
+            switch (slot) {
+                case 0: equipmentSlot = EquipmentSlot.HEAD; break;
+                case 1: equipmentSlot = EquipmentSlot.CHEST; break;
+                case 2: equipmentSlot = EquipmentSlot.LEGS; break;
+                case 3: equipmentSlot = EquipmentSlot.FEET; break;
+                default: return ItemStack.EMPTY;
+            }
+            return this.getItemBySlot(equipmentSlot);
         }
         return ItemStack.EMPTY;
     }
@@ -635,7 +646,7 @@ public class BotEntity extends PathfinderMob {
      * @param item The item to hold
      */
     public void setMainHandItem(ItemStack item) {
-        this.mainHandItem = item;
+        // MAJOR FIX: Direct storage in Minecraft's equipment system only
         this.setItemSlot(EquipmentSlot.MAINHAND, item);
     }
 
@@ -644,7 +655,7 @@ public class BotEntity extends PathfinderMob {
      * @param item The item to hold
      */
     public void setOffHandItem(ItemStack item) {
-        this.offHandItem = item;
+        // MAJOR FIX: Direct storage in Minecraft's equipment system only
         this.setItemSlot(EquipmentSlot.OFFHAND, item);
     }
 

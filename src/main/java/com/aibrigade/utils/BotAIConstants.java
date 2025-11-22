@@ -73,13 +73,19 @@ public class BotAIConstants {
     /** Normal walking speed multiplier */
     public static final double SPEED_WALK = 1.0;
 
-    /** Running speed multiplier */
+    /** Running speed multiplier
+     * @deprecated Sprint is now handled via setSprinting() instead of speed multipliers */
+    @Deprecated
     public static final double SPEED_RUN = 1.2;
 
-    /** Sprint speed multiplier */
+    /** Sprint speed multiplier
+     * @deprecated Sprint is now handled via setSprinting() instead of speed multipliers */
+    @Deprecated
     public static final double SPEED_SPRINT = 1.5;
 
-    /** Slow movement speed multiplier */
+    /** Slow movement speed multiplier
+     * @deprecated Not used in current implementation */
+    @Deprecated
     public static final double SPEED_SLOW = 0.8;
 
     // ==================== JUMPING & CLIMBING ====================

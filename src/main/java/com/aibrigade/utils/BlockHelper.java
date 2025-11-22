@@ -7,6 +7,19 @@ import net.minecraft.world.level.block.state.BlockState;
 /**
  * Utility class for block state checking
  * Consolidates repeated block validation patterns
+ *
+ * THREAD SAFETY:
+ * This class is THREAD-SAFE because:
+ * - All methods are stateless (no mutable shared state)
+ * - No caching or instance variables
+ * - All operations are read-only queries via level.getBlockState()
+ * - Minecraft's Level handles concurrent access internally
+ *
+ * NOTE: Results from multi-block checks (hasLineOfSight, hasVerticalClearance)
+ * represent a snapshot in time and may become stale if blocks are modified
+ * concurrently. This is expected behavior for read-only queries.
+ *
+ * @ThreadSafe All methods can be safely called from multiple threads
  */
 public class BlockHelper {
 

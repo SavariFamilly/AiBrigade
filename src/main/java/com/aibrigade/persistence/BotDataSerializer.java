@@ -3,6 +3,10 @@ package com.aibrigade.persistence;
 import com.aibrigade.bots.BotEntity;
 import com.google.gson.*;
 import net.minecraft.core.BlockPos;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtUtils;
+import net.minecraft.nbt.TagParser;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.UUID;
@@ -50,7 +54,8 @@ public class BotDataSerializer {
         // Leader
         public String leaderUUID;
 
-        // Equipment (item IDs)
+        // Equipment (NBT serialized as SNBT string for full data preservation)
+        // Uses Minecraft's official SNBT format to preserve enchantments, NBT, durability, etc.
         public String helmet;
         public String chestplate;
         public String leggings;
@@ -93,15 +98,56 @@ public class BotDataSerializer {
             UUID leaderId = bot.getLeaderId();
             data.leaderUUID = leaderId != null ? leaderId.toString() : null;
 
-            // Equipment
-            data.helmet = bot.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.HEAD).toString();
-            data.chestplate = bot.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.CHEST).toString();
-            data.leggings = bot.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.LEGS).toString();
-            data.boots = bot.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.FEET).toString();
-            data.mainHand = bot.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND).toString();
-            data.offHand = bot.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.OFFHAND).toString();
+            // Equipment (serialize using NBT to preserve all data)
+            data.helmet = serializeItemStack(bot.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.HEAD));
+            data.chestplate = serializeItemStack(bot.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.CHEST));
+            data.leggings = serializeItemStack(bot.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.LEGS));
+            data.boots = serializeItemStack(bot.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.FEET));
+            data.mainHand = serializeItemStack(bot.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND));
+            data.offHand = serializeItemStack(bot.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.OFFHAND));
 
             return data;
+        }
+    }
+
+    /**
+     * Serialize ItemStack to SNBT (String NBT) format
+     * Preserves ALL data (enchantments, durability, custom names, NBT tags, etc.)
+     * Uses Minecraft's official SNBT format which is the standard for ItemStack serialization
+     */
+    private static String serializeItemStack(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) {
+            return "";
+        }
+
+        try {
+            CompoundTag nbt = new CompoundTag();
+            stack.save(nbt);
+            // Convert to SNBT (String NBT) - Official Minecraft format
+            return nbt.toString();
+        } catch (Exception e) {
+            System.err.println("[BotDataSerializer] Error serializing ItemStack: " + e.getMessage());
+            return "";
+        }
+    }
+
+    /**
+     * Deserialize SNBT string to ItemStack
+     * Restores ALL data preserved during serialization
+     * Uses Minecraft's official TagParser for robust deserialization
+     */
+    public static ItemStack deserializeItemStack(String snbt) {
+        if (snbt == null || snbt.isEmpty()) {
+            return ItemStack.EMPTY;
+        }
+
+        try {
+            // Parse SNBT string to CompoundTag using Minecraft's official parser
+            CompoundTag nbt = TagParser.parseTag(snbt);
+            return ItemStack.of(nbt);
+        } catch (Exception e) {
+            System.err.println("[BotDataSerializer] Error deserializing ItemStack from SNBT: " + e.getMessage());
+            return ItemStack.EMPTY;
         }
     }
 

@@ -913,12 +913,16 @@ public class BotManager {
 
     /**
      * Inner class representing a bot group
+     * THREAD-SAFE: Uses ConcurrentHashMap.newKeySet() for concurrent access
      */
     public static class BotGroup {
         private final String name;
-        private String leaderName;
-        private float followRadius;
-        private final Set<UUID> botIds = new HashSet<>();
+        private volatile String leaderName;  // volatile for visibility across threads
+        private volatile float followRadius; // volatile for visibility across threads
+
+        // CRITICAL FIX: Use thread-safe Set instead of HashSet
+        // ConcurrentHashMap.newKeySet() allows concurrent reads/writes without ConcurrentModificationException
+        private final Set<UUID> botIds = ConcurrentHashMap.newKeySet();
 
         public BotGroup(String name, String leaderName, float followRadius) {
             this.name = name;
@@ -926,12 +930,22 @@ public class BotManager {
             this.followRadius = followRadius;
         }
 
+        /**
+         * Add bot to group (thread-safe)
+         */
         public void addBot(UUID botId) {
-            botIds.add(botId);
+            if (botId != null) {
+                botIds.add(botId);
+            }
         }
 
+        /**
+         * Remove bot from group (thread-safe)
+         */
         public void removeBot(UUID botId) {
-            botIds.remove(botId);
+            if (botId != null) {
+                botIds.remove(botId);
+            }
         }
 
         public String getName() {
@@ -942,6 +956,9 @@ public class BotManager {
             return leaderName;
         }
 
+        /**
+         * Set leader name (thread-safe with volatile)
+         */
         public void setLeaderName(String leaderName) {
             this.leaderName = leaderName;
         }
@@ -950,12 +967,33 @@ public class BotManager {
             return followRadius;
         }
 
+        /**
+         * Set follow radius (thread-safe with volatile)
+         */
         public void setFollowRadius(float followRadius) {
             this.followRadius = followRadius;
         }
 
+        /**
+         * Get bot IDs (returns unmodifiable view of thread-safe set)
+         * Safe to iterate even if other threads are modifying
+         */
         public Set<UUID> getBotIds() {
             return Collections.unmodifiableSet(botIds);
+        }
+
+        /**
+         * Get bot count (thread-safe)
+         */
+        public int getBotCount() {
+            return botIds.size();
+        }
+
+        /**
+         * Check if group is empty (thread-safe)
+         */
+        public boolean isEmpty() {
+            return botIds.isEmpty();
         }
     }
 

@@ -206,6 +206,12 @@ public class BotDatabase {
      * Enregistre un nouveau bot dans la base de données
      */
     public static BotData registerBot(BotEntity bot) {
+        // MAJOR FIX #37: Add null check on bot parameter
+        if (bot == null) {
+            System.err.println("[BotDatabase] Cannot register bot - bot entity is null");
+            return null;
+        }
+
         BotData data = new BotData();
         data.botUUID = bot.getUUID();
 
@@ -223,6 +229,12 @@ public class BotDatabase {
      * Met à jour les données d'un bot existant
      */
     public static void updateBot(BotEntity bot) {
+        // MAJOR FIX #37: Add null check on bot parameter
+        if (bot == null) {
+            System.err.println("[BotDatabase] Cannot update bot - bot entity is null");
+            return;
+        }
+
         UUID uuid = bot.getUUID();
         BotData data = BOT_DATABASE.get(uuid);
 
@@ -240,6 +252,12 @@ public class BotDatabase {
      * Copie les données du BotEntity vers BotData
      */
     private static void updateBotData(BotData data, BotEntity bot) {
+        // MAJOR FIX #37: Add null checks on parameters
+        if (data == null || bot == null) {
+            System.err.println("[BotDatabase] Cannot update bot data - null parameter (data=" + data + ", bot=" + bot + ")");
+            return;
+        }
+
         // Identité
         data.playerUUID = bot.getPlayerUUID();
         data.skinTextureValue = bot.getSkinTextureValue();
@@ -281,6 +299,12 @@ public class BotDatabase {
      * Applique les données sauvegardées à un BotEntity
      */
     public static void applyDataToBot(BotEntity bot) {
+        // MAJOR FIX #37: Add null check on bot parameter
+        if (bot == null) {
+            System.err.println("[BotDatabase] Cannot apply data - bot entity is null");
+            return;
+        }
+
         UUID uuid = bot.getUUID();
         BotData data = BOT_DATABASE.get(uuid);
 
@@ -302,8 +326,31 @@ public class BotDatabase {
         bot.setFollowingLeader(data.isFollowingLeader);
 
         // Appliquer l'état
-        bot.setAIState(BotEntity.BotAIState.valueOf(data.aiState));
-        bot.setRole(BotEntity.BotRole.valueOf(data.role));
+        // MAJOR FIX #38: Safely parse enum values with try-catch and fallback
+        // valueOf() throws IllegalArgumentException if value doesn't match enum constant
+        // This can happen if data is corrupted or from older version with different enums
+        try {
+            if (data.aiState != null && !data.aiState.isEmpty()) {
+                bot.setAIState(BotEntity.BotAIState.valueOf(data.aiState));
+            } else {
+                bot.setAIState(BotEntity.BotAIState.IDLE); // Default fallback
+            }
+        } catch (IllegalArgumentException e) {
+            System.err.println("[BotDatabase] Invalid AI state '" + data.aiState + "', using IDLE. Error: " + e.getMessage());
+            bot.setAIState(BotEntity.BotAIState.IDLE);
+        }
+
+        try {
+            if (data.role != null && !data.role.isEmpty()) {
+                bot.setRole(BotEntity.BotRole.valueOf(data.role));
+            } else {
+                bot.setRole(BotEntity.BotRole.SOLDIER); // Default fallback
+            }
+        } catch (IllegalArgumentException e) {
+            System.err.println("[BotDatabase] Invalid role '" + data.role + "', using SOLDIER. Error: " + e.getMessage());
+            bot.setRole(BotEntity.BotRole.SOLDIER);
+        }
+
         bot.setBehaviorType(data.behaviorType);
         bot.setStatic(data.isStatic);
         bot.setFollowRadius(data.followRadius);

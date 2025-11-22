@@ -49,9 +49,20 @@ public class PersistenceManager {
      * Save all bots to disk
      */
     public void saveBots(Collection<BotEntity> bots) {
+        // MAJOR FIX #36: Add null check on bots parameter
+        if (bots == null) {
+            AIBrigadeMod.LOGGER.warn("Cannot save bots - collection is null");
+            return;
+        }
+
         JsonArray botsArray = new JsonArray();
 
         for (BotEntity bot : bots) {
+            // Skip null bots in collection
+            if (bot == null) {
+                continue;
+            }
+
             try {
                 JsonObject botJson = BotDataSerializer.serializeBotToJson(bot);
                 botsArray.add(botJson);
@@ -112,15 +123,28 @@ public class PersistenceManager {
      * Save group data
      */
     public void saveGroups(Map<String, List<UUID>> groups) {
+        // MAJOR FIX #36: Add null check on groups parameter
+        if (groups == null) {
+            AIBrigadeMod.LOGGER.warn("Cannot save groups - map is null");
+            return;
+        }
+
         JsonObject root = new JsonObject();
         root.addProperty("version", "1.0");
         root.addProperty("timestamp", System.currentTimeMillis());
 
         JsonObject groupsObj = new JsonObject();
         for (Map.Entry<String, List<UUID>> entry : groups.entrySet()) {
+            // Skip null entries
+            if (entry == null || entry.getValue() == null) {
+                continue;
+            }
+
             JsonArray uuidsArray = new JsonArray();
             for (UUID uuid : entry.getValue()) {
-                uuidsArray.add(uuid.toString());
+                if (uuid != null) {
+                    uuidsArray.add(uuid.toString());
+                }
             }
             groupsObj.add(entry.getKey(), uuidsArray);
         }
@@ -230,12 +254,22 @@ public class PersistenceManager {
      * Save presets
      */
     public void savePresets(Map<String, JsonObject> presets) {
+        // MAJOR FIX #36: Add null check on presets parameter
+        if (presets == null) {
+            AIBrigadeMod.LOGGER.warn("Cannot save presets - map is null");
+            return;
+        }
+
         JsonObject root = new JsonObject();
         root.addProperty("version", "1.0");
         root.addProperty("timestamp", System.currentTimeMillis());
 
         JsonObject presetsObj = new JsonObject();
         for (Map.Entry<String, JsonObject> entry : presets.entrySet()) {
+            // Skip null entries
+            if (entry == null || entry.getValue() == null) {
+                continue;
+            }
             presetsObj.add(entry.getKey(), entry.getValue());
         }
 
@@ -344,15 +378,19 @@ public class PersistenceManager {
             return;
         }
 
-        Files.walk(directory)
-            .sorted(Comparator.reverseOrder())
-            .forEach(path -> {
-                try {
-                    Files.delete(path);
-                } catch (IOException e) {
-                    AIBrigadeMod.LOGGER.error("Failed to delete: " + path, e);
-                }
-            });
+        // MAJOR FIX #35: Wrap Files.walk() in try-with-resources to prevent resource leak
+        // Files.walk() returns a Stream that holds open file descriptors
+        // Without proper closure, this causes file handle leaks (especially on Windows)
+        try (var paths = Files.walk(directory)) {
+            paths.sorted(Comparator.reverseOrder())
+                .forEach(path -> {
+                    try {
+                        Files.delete(path);
+                    } catch (IOException e) {
+                        AIBrigadeMod.LOGGER.error("Failed to delete: " + path, e);
+                    }
+                });
+        }
     }
 
     // ==================== FILE I/O ====================

@@ -519,8 +519,26 @@ public class BotManager {
      * Find a leader entity by name (player or bot) in the world
      */
     private UUID findLeaderUUID(net.minecraft.world.level.Level level, String leaderName) {
+        // MAJOR FIX #34: Add null safety for server access chain
+        if (level == null) {
+            AIBrigadeMod.LOGGER.warn("Cannot find leader - level is null");
+            return null;
+        }
+
+        var server = level.getServer();
+        if (server == null) {
+            AIBrigadeMod.LOGGER.warn("Cannot find leader - server is null (client-side call?)");
+            return null;
+        }
+
+        var playerList = server.getPlayerList();
+        if (playerList == null) {
+            AIBrigadeMod.LOGGER.warn("Cannot find leader - player list is null");
+            return null;
+        }
+
         // Check if it's a player
-        for (net.minecraft.server.level.ServerPlayer player : level.getServer().getPlayerList().getPlayers()) {
+        for (net.minecraft.server.level.ServerPlayer player : playerList.getPlayers()) {
             if (player.getGameProfile().getName().equalsIgnoreCase(leaderName)) {
                 AIBrigadeMod.LOGGER.info("Found leader player: {} (UUID: {})", leaderName, player.getUUID());
                 return player.getUUID();

@@ -142,6 +142,17 @@ public class AIBrigadeMod {
     public void onServerStarting(ServerStartingEvent event) {
         LOGGER.info("Server starting - Loading AIBrigade data");
 
+        // MAJOR FIX #33: Add null checks for managers before use
+        if (botManager == null) {
+            LOGGER.error("BotManager not initialized - cannot load persistent data. Setup may have failed.");
+            return;
+        }
+
+        if (aiManager == null) {
+            LOGGER.error("AIManager not initialized - cannot start AI ticking. Setup may have failed.");
+            return;
+        }
+
         // Initialize BotDatabase
         var worldPath = event.getServer().overworld().getLevel().getServer()
             .getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT);
@@ -171,11 +182,20 @@ public class AIBrigadeMod {
         BotDatabase.saveDatabase();
         LOGGER.info("BotDatabase saved");
 
-        // Save bot and group data
-        botManager.savePersistentData(event.getServer());
+        // MAJOR FIX #33: Add null checks for managers before use
+        if (botManager != null) {
+            // Save bot and group data
+            botManager.savePersistentData(event.getServer());
+        } else {
+            LOGGER.error("BotManager not initialized - cannot save persistent data. Data may be lost!");
+        }
 
-        // Stop AI ticking and cleanup
-        aiManager.stopAITicking();
+        if (aiManager != null) {
+            // Stop AI ticking and cleanup
+            aiManager.stopAITicking();
+        } else {
+            LOGGER.error("AIManager not initialized - cannot stop AI ticking properly.");
+        }
 
         LOGGER.info("AIBrigade data saved and cleanup complete");
     }

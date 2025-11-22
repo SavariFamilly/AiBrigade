@@ -217,11 +217,12 @@ public class RealisticFollowLeaderGoal extends Goal {
         // Juste un petit boost si vraiment trop loin pour rattraper le leader
         double finalSpeed = speedModifier;
 
-        // Téléportation si vraiment trop loin (>50 blocs)
-        if (distance > BotAIConstants.TELEPORT_DISTANCE) {
-            bot.teleportTo(leader.getX(), leader.getY(), leader.getZ());
-            return;
-        }
+        // NO TELEPORT FIX: Téléportation complètement désactivée
+        // Les bots doivent TOUJOURS marcher jusqu'au leader, peu importe la distance
+        // if (distance > BotAIConstants.TELEPORT_DISTANCE) {
+        //     bot.teleportTo(leader.getX(), leader.getY(), leader.getZ());
+        //     return;
+        // }
 
         // Naviguer vers la position
         BotMovementHelper.moveToPosition(bot, curvedTarget, finalSpeed);

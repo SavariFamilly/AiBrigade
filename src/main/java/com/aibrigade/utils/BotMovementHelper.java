@@ -150,19 +150,23 @@ public class BotMovementHelper {
     /**
      * Teleport bot to entity if too far away
      * Returns true if teleported
+     *
+     * NO TELEPORT FIX: Téléportation complètement désactivée
+     * Cette méthode retourne toujours false et ne téléporte JAMAIS
      */
     public static boolean teleportIfTooFar(BotEntity bot, LivingEntity target, double maxDistance) {
         if (bot == null || target == null) {
             return false;
         }
 
-        if (DistanceHelper.shouldTeleport(bot, target, maxDistance)) {
-            bot.teleportTo(target.getX(), target.getY(), target.getZ());
-            stopMovement(bot);
-            return true;
-        }
+        // NO TELEPORT FIX: Téléportation désactivée - les bots marchent toujours
+        // if (DistanceHelper.shouldTeleport(bot, target, maxDistance)) {
+        //     bot.teleportTo(target.getX(), target.getY(), target.getZ());
+        //     stopMovement(bot);
+        //     return true;
+        // }
 
-        return false;
+        return false; // Jamais de téléportation
     }
 
     /**

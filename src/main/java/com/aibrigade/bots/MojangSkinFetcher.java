@@ -103,45 +103,62 @@ public class MojangSkinFetcher {
         String uuidString = uuid.toString().replace("-", "");
         URL url = new URL(SESSION_SERVER_URL + uuidString + "?unsigned=false");
 
-        HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-        connection.setRequestMethod("GET");
-        connection.setConnectTimeout(5000);
-        connection.setReadTimeout(5000);
+        HttpURLConnection connection = null;
+        BufferedReader reader = null;
 
-        int responseCode = connection.getResponseCode();
-        if (responseCode != 200) {
-            throw new Exception("HTTP " + responseCode);
+        try {
+            connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestMethod("GET");
+            connection.setConnectTimeout(5000);
+            connection.setReadTimeout(5000);
+
+            int responseCode = connection.getResponseCode();
+            if (responseCode != 200) {
+                throw new Exception("HTTP " + responseCode);
+            }
+
+            // Lire la réponse JSON
+            reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
+            StringBuilder response = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                response.append(line);
+            }
+
+            // Parser le JSON
+            JsonObject json = JsonParser.parseString(response.toString()).getAsJsonObject();
+            String name = json.get("name").getAsString();
+
+            // Créer le GameProfile
+            GameProfile profile = new GameProfile(uuid, name);
+
+            // Ajouter les propriétés de texture (skin + cape)
+            if (json.has("properties")) {
+                json.getAsJsonArray("properties").forEach(element -> {
+                    JsonObject property = element.getAsJsonObject();
+                    String propName = property.get("name").getAsString();
+                    String value = property.get("value").getAsString();
+                    String signature = property.has("signature") ? property.get("signature").getAsString() : null;
+
+                    profile.getProperties().put(propName, new Property(propName, value, signature));
+                });
+            }
+
+            return profile;
+
+        } finally {
+            // CRITICAL: Always close resources to prevent memory/connection leaks
+            if (reader != null) {
+                try {
+                    reader.close();
+                } catch (Exception e) {
+                    // Ignore close exceptions
+                }
+            }
+            if (connection != null) {
+                connection.disconnect();
+            }
         }
-
-        // Lire la réponse JSON
-        BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
-        StringBuilder response = new StringBuilder();
-        String line;
-        while ((line = reader.readLine()) != null) {
-            response.append(line);
-        }
-        reader.close();
-
-        // Parser le JSON
-        JsonObject json = JsonParser.parseString(response.toString()).getAsJsonObject();
-        String name = json.get("name").getAsString();
-
-        // Créer le GameProfile
-        GameProfile profile = new GameProfile(uuid, name);
-
-        // Ajouter les propriétés de texture (skin + cape)
-        if (json.has("properties")) {
-            json.getAsJsonArray("properties").forEach(element -> {
-                JsonObject property = element.getAsJsonObject();
-                String propName = property.get("name").getAsString();
-                String value = property.get("value").getAsString();
-                String signature = property.has("signature") ? property.get("signature").getAsString() : null;
-
-                profile.getProperties().put(propName, new Property(propName, value, signature));
-            });
-        }
-
-        return profile;
     }
 
     /**
@@ -168,12 +185,15 @@ public class MojangSkinFetcher {
                 return null;
             }
 
+            HttpURLConnection connection = null;
+            BufferedReader reader = null;
+
             try {
                 // Appliquer le rate limiting
                 API_RATE_LIMITER.acquire();
 
                 URL url = new URL(USERNAME_TO_UUID_URL + username);
-                HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+                connection = (HttpURLConnection) url.openConnection();
                 connection.setRequestMethod("GET");
                 connection.setConnectTimeout(5000);
                 connection.setReadTimeout(5000);
@@ -192,13 +212,12 @@ public class MojangSkinFetcher {
                 }
 
                 // Lire la réponse JSON
-                BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
+                reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
                 StringBuilder response = new StringBuilder();
                 String line;
                 while ((line = reader.readLine()) != null) {
                     response.append(line);
                 }
-                reader.close();
 
                 // Parser le JSON
                 JsonObject json = JsonParser.parseString(response.toString()).getAsJsonObject();
@@ -222,6 +241,19 @@ public class MojangSkinFetcher {
                 com.aibrigade.main.AIBrigadeMod.LOGGER.error("Error checking username {}: {}", username, e.getMessage());
                 failedAttempts++;
                 return null;
+
+            } finally {
+                // CRITICAL: Always close resources to prevent memory/connection leaks
+                if (reader != null) {
+                    try {
+                        reader.close();
+                    } catch (Exception e) {
+                        // Ignore close exceptions
+                    }
+                }
+                if (connection != null) {
+                    connection.disconnect();
+                }
             }
         }, Util.backgroundExecutor());
     }

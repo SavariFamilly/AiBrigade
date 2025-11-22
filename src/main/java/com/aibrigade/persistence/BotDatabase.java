@@ -9,6 +9,7 @@ import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -153,8 +154,12 @@ public class BotDatabase {
 
     /**
      * Sauvegarde la base de données dans le fichier JSON
+     * Uses atomic write pattern to prevent corruption if server crashes during save
      */
     public static void saveDatabase() {
+        // Create temp file path in the same directory for atomic move
+        Path tempPath = DATABASE_PATH.getParent().resolve(DATABASE_PATH.getFileName() + ".tmp");
+
         try {
             JsonObject root = new JsonObject();
             JsonArray botsArray = new JsonArray();
@@ -170,14 +175,30 @@ public class BotDatabase {
             root.addProperty("lastSaved", System.currentTimeMillis());
 
             String json = GSON.toJson(root);
-            Files.writeString(DATABASE_PATH, json);
 
-            System.out.println("[BotDatabase] Sauvegardé " + BOT_DATABASE.size() + " bots");
+            // ATOMIC WRITE PATTERN:
+            // 1. Write to temporary file
+            Files.writeString(tempPath, json);
+
+            // 2. Atomic move (replace) - Guarantees either old file exists or new file exists, never corrupted
+            // ATOMIC_MOVE ensures that the operation is atomic at filesystem level
+            Files.move(tempPath, DATABASE_PATH, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+
+            System.out.println("[BotDatabase] Sauvegardé " + BOT_DATABASE.size() + " bots (atomic write)");
             isDirty = false;
 
         } catch (Exception e) {
             System.err.println("[BotDatabase] Erreur lors de la sauvegarde: " + e.getMessage());
             e.printStackTrace();
+
+            // Clean up temp file if it exists
+            try {
+                if (Files.exists(tempPath)) {
+                    Files.delete(tempPath);
+                }
+            } catch (IOException cleanupEx) {
+                // Ignore cleanup errors
+            }
         }
     }
 

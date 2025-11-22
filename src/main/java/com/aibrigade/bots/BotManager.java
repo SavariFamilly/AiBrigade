@@ -141,10 +141,10 @@ public class BotManager {
 
         AIBrigadeMod.LOGGER.info("Spawning {} bots for group {}", maxToSpawn, groupName);
 
-        // Create group if it doesn't exist
-        if (!botGroups.containsKey(groupName)) {
-            botGroups.put(groupName, new BotGroup(groupName, leaderName, radius));
-        }
+        // MAJOR FIX: Use putIfAbsent() for atomic check-and-put operation
+        // Old: containsKey() + put() was non-atomic (race condition)
+        // New: putIfAbsent() is atomic and thread-safe
+        botGroups.putIfAbsent(groupName, new BotGroup(groupName, leaderName, radius));
 
         // Spawn bots in a spread pattern
         for (int i = 0; i < maxToSpawn; i++) {
@@ -317,9 +317,15 @@ public class BotManager {
             return TeamRelationship.ALLIED;
         }
 
+        // MAJOR FIX: Avoid double map lookup (containsKey + get)
+        // Old: containsKey() followed by get() = two map lookups
+        // New: Single get() and null check
         Map<String, TeamRelationship> relationships = teamRelationships.get(group1);
-        if (relationships != null && relationships.containsKey(group2)) {
-            return relationships.get(group2);
+        if (relationships != null) {
+            TeamRelationship relationship = relationships.get(group2);
+            if (relationship != null) {
+                return relationship;
+            }
         }
 
         // Default to neutral if no relationship set
@@ -368,10 +374,12 @@ public class BotManager {
             }
         }
 
+        // MAJOR FIX: Avoid double map lookup (containsKey + get)
         // Check player-to-group relationships
         if (!hasHostileRelationships) {
             for (Map<String, TeamRelationship> playerRels : playerRelationships.values()) {
-                if (playerRels.containsKey(groupName) && playerRels.get(groupName) == TeamRelationship.HOSTILE) {
+                TeamRelationship rel = playerRels.get(groupName);
+                if (rel == TeamRelationship.HOSTILE) {
                     hasHostileRelationships = true;
                     break;
                 }
@@ -413,9 +421,13 @@ public class BotManager {
      * @return The relationship, or NEUTRAL if not set
      */
     public TeamRelationship getPlayerGroupRelationship(UUID playerId, String groupName) {
+        // MAJOR FIX: Avoid double map lookup (containsKey + get)
         Map<String, TeamRelationship> relationships = playerRelationships.get(playerId);
-        if (relationships != null && relationships.containsKey(groupName)) {
-            return relationships.get(groupName);
+        if (relationships != null) {
+            TeamRelationship relationship = relationships.get(groupName);
+            if (relationship != null) {
+                return relationship;
+            }
         }
         return TeamRelationship.NEUTRAL;
     }
@@ -433,9 +445,10 @@ public class BotManager {
      * @return true if successful, false if group not found
      */
     public boolean setFollowLeader(String groupName, boolean enabled, float radius) {
+        // MAJOR FIX: Avoid double map lookup (containsKey + get)
         // Check if target is a group
-        if (botGroups.containsKey(groupName)) {
-            BotGroup group = botGroups.get(groupName);
+        BotGroup group = botGroups.get(groupName);
+        if (group != null) {
             Set<UUID> groupBots = group.getBotIds();
             if (groupBots.isEmpty()) {
                 return false;
@@ -553,8 +566,10 @@ public class BotManager {
             return 0;
         }
 
+        // MAJOR FIX: Avoid double map lookup (containsKey then get in giveArmorToGroup)
         // Check if target is a group or individual bot
-        if (botGroups.containsKey(targetName)) {
+        BotGroup group = botGroups.get(targetName);
+        if (group != null) {
             // Apply to group
             return giveArmorToGroup(targetName, isFull, armorMaterials);
         } else {

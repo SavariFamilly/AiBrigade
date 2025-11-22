@@ -163,10 +163,11 @@ public class RealisticFollowLeaderGoal extends Goal {
         // Décider si ce bot va activement chase
         updateChaseDecision();
 
-        // Activer le sprint SEULEMENT pour les bots qui suivent activement (1/6)
-        if (behaviorType == FollowBehaviorType.ACTIVE_FOLLOW) {
-            bot.setSprinting(true);
-        }
+        // SPEED FIX: Activer le sprint pour TOUS les bots qui suivent leur leader
+        // Les bots ACTIVE_FOLLOW (1/6) gardent leur comportement proche
+        // Les bots RADIUS_BASED (5/6) sprintent maintenant aussi pour rester dans le rayon
+        // Impact: +30% vitesse pour 5/6 des bots (0.10 → 0.13 blocks/tick)
+        bot.setSprinting(true);
     }
 
     @Override
@@ -247,10 +248,9 @@ public class RealisticFollowLeaderGoal extends Goal {
         BotMovementHelper.stopMovement(bot);
         targetPosition = null;
 
-        // Désactiver le sprint quand on arrête de suivre (seulement si c'était actif)
-        if (behaviorType == FollowBehaviorType.ACTIVE_FOLLOW) {
-            bot.setSprinting(false);
-        }
+        // SPEED FIX: Désactiver le sprint quand on arrête de suivre
+        // (Tous les bots sprintent maintenant pendant le follow)
+        bot.setSprinting(false);
     }
 
     /**

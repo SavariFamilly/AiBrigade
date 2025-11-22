@@ -184,14 +184,17 @@ public class BotEntity extends PathfinderMob {
         this.goalSelector.addGoal(1, new ActiveGazeBehavior(this));
 
         // Priorité 2: Realistic follow leader (avec probabilités et variations)
-        RealisticFollowLeaderGoal followGoal = new RealisticFollowLeaderGoal(this, 1.0D, 3.0F, 10.0F);
+        // SPEED FIX: Increased from 1.0D to 1.2D (+20% faster with sprint = 0.156 blocks/tick)
+        RealisticFollowLeaderGoal followGoal = new RealisticFollowLeaderGoal(this, 1.2D, 3.0F, 10.0F);
         this.goalSelector.addGoal(2, followGoal);
 
         // Priorité 3: Melee attack avec sprint et sauts (comme un joueur)
-        this.goalSelector.addGoal(3, new SprintingMeleeAttackGoal(this, 1.0D, false));
+        // SPEED FIX: Increased from 1.0D to 1.2D (+20% faster with sprint = 0.156 blocks/tick)
+        this.goalSelector.addGoal(3, new SprintingMeleeAttackGoal(this, 1.2D, false));
 
         // Priorité 5: Wander when idle
-        this.goalSelector.addGoal(5, new net.minecraft.world.entity.ai.goal.WaterAvoidingRandomStrollGoal(this, 0.8D));
+        // SPEED FIX: Increased from 0.8D to 1.0D (normal walk speed instead of 80%)
+        this.goalSelector.addGoal(5, new net.minecraft.world.entity.ai.goal.WaterAvoidingRandomStrollGoal(this, 1.0D));
 
         // Priorité 6: Look at player (secondaire car ActiveGazeBehavior gère déjà)
         this.goalSelector.addGoal(6, new net.minecraft.world.entity.ai.goal.LookAtPlayerGoal(this, Player.class, 8.0F));

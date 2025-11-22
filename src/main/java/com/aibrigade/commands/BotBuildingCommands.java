@@ -22,10 +22,15 @@ public class BotBuildingCommands {
 
     /**
      * Enregistre les commandes
+     * CRITICAL SECURITY FIX: Requires operator permission (level 2)
      */
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(
             Commands.literal("bot")
+                // CRITICAL SECURITY FIX: Require operator permission (level 2)
+                // Without this, ANY player could enable/disable building for ALL bots
+                // This would allow massive griefing or breaking gameplay
+                .requires(source -> source.hasPermission(2))
                 .then(Commands.literal("building")
                     .then(Commands.literal("on")
                         .executes(BotBuildingCommands::enableBuildingAll)

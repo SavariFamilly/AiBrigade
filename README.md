@@ -551,5 +551,6 @@ A: Group-level commands are supported. Individual control coming in future updat
 ---
 
 **Enjoy AIBrigade! Create your bot army today!**
-#   A i B r i g a d e  
+#   A i B r i g a d e 
+ 
  
